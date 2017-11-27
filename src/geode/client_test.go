@@ -75,6 +75,59 @@ var _ = Describe("Client", func() {
 			Expect(client.Put("foo", "A", struct{}{})).To(MatchError("unable to encode type: struct {}"))
 		})
 	})
+
+	Context("Get", func() {
+		It("decodes values correctly", func() {
+			var callCount = 0
+			var v *v1.EncodedValue
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				switch callCount {
+				case 0:
+					// Implicit int()
+					v, _ = connector.GetEncodedValue(1)
+				case 1:
+					v, _ = connector.GetEncodedValue(int16(2))
+				case 2:
+					v, _ = connector.GetEncodedValue(int32(3))
+				case 3:
+					v, _ = connector.GetEncodedValue(int64(4))
+				case 4:
+					v, _ = connector.GetEncodedValue(byte(5))
+				case 5:
+					v, _ = connector.GetEncodedValue(true)
+				case 6:
+					v, _ = connector.GetEncodedValue(float64(6))
+				case 7:
+					v, _ = connector.GetEncodedValue(float32(7))
+				case 8:
+					v, _ = connector.GetEncodedValue([]byte{8})
+				case 9:
+					v, _ = connector.GetEncodedValue("9")
+				}
+				callCount += 1
+
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_GetResponse{
+						GetResponse: &v1.GetResponse{
+							Result: v,
+						},
+					},
+				}
+				return writeResponse(response, b)
+			}
+
+			Expect(client.Get("foo", "A")).To(Equal(int32(1)))
+			Expect(client.Get("foo", "A")).To(Equal(int32(2)))
+			Expect(client.Get("foo", "A")).To(Equal(int32(3)))
+			Expect(client.Get("foo", "A")).To(Equal(int64(4)))
+			Expect(client.Get("foo", "A")).To(Equal(byte(5)))
+			Expect(client.Get("foo", "A")).To(Equal(true))
+			Expect(client.Get("foo", "A")).To(Equal(float64(6)))
+			Expect(client.Get("foo", "A")).To(Equal(float32(7)))
+			Expect(client.Get("foo", "A")).To(Equal([]byte{8}))
+			Expect(client.Get("foo", "A")).To(Equal("9"))
+		})
+	})
 })
 
 func writeResponse(r *v1.Response, b []byte) (int, error) {

@@ -20,3 +20,7 @@ func (this *Client) Put(region string, key, value interface{}) error {
 	return this.connector.Put(region, key, value)
 }
 
+func (this *Client) Get(region string, key interface{}) (interface{}, error) {
+	return this.connector.Get(region, key)
+}
+

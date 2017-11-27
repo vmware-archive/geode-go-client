@@ -60,12 +60,12 @@ func (this *Connector) Connect() (err error) {
 }
 
 func (this *Connector) Put(region string, k, v interface{}) (err error) {
-	key, err := getEncodedValue(k)
+	key, err := GetEncodedValue(k)
 	if err != nil {
 		return err
 	}
 
-	value, err := getEncodedValue(v)
+	value, err := GetEncodedValue(v)
 	if err != nil {
 		return err
 	}
@@ -97,6 +97,45 @@ func (this *Connector) Put(region string, k, v interface{}) (err error) {
 	}
 
 	return nil
+}
+
+func (this *Connector) Get(region string, k interface{}) (interface{}, error) {
+	key, err := GetEncodedValue(k)
+	if err != nil {
+		return nil, err
+	}
+
+	get := &v1.Request{
+		RequestAPI: &v1.Request_GetRequest{
+			GetRequest: &v1.GetRequest{
+				RegionName: region,
+				Key:        key,
+			},
+		},
+	}
+
+	err = this.writeRequest(get)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := this.readResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	if x := response.GetErrorResponse(); x != nil {
+		return nil, errors.New(x.GetError().Message)
+	}
+
+	v := response.GetGetResponse().GetResult()
+
+	decoded, err := getDecodedValue(v)
+	if err != nil {
+		return nil, err
+	}
+
+	return decoded, nil
 }
 
 func (this *Connector) writeRequest(r *v1.Request) (err error) {
@@ -137,16 +176,18 @@ func (this *Connector) readResponse() (*v1.Response, error) {
 	return response.GetResponse(), nil
 }
 
-func getEncodedValue(val interface{}) (*v1.EncodedValue, error) {
+func GetEncodedValue(val interface{}) (*v1.EncodedValue, error) {
 	ev := &v1.EncodedValue{}
 
 	switch k := val.(type) {
+	case int:
+		ev.Value = &v1.EncodedValue_IntResult{int32(k)}
+	case int16:
+		ev.Value = &v1.EncodedValue_ShortResult{int32(k)}
 	case int32:
 		ev.Value = &v1.EncodedValue_IntResult{k}
 	case int64:
 		ev.Value = &v1.EncodedValue_LongResult{k}
-	case int16:
-		ev.Value = &v1.EncodedValue_ShortResult{int32(k)}
 	case byte:
 		ev.Value = &v1.EncodedValue_ByteResult{int32(k)}
 	case bool:
@@ -166,4 +207,34 @@ func getEncodedValue(val interface{}) (*v1.EncodedValue, error) {
 	}
 
 	return ev, nil
+}
+
+func getDecodedValue(value *v1.EncodedValue) (interface{}, error) {
+	var decodedValue interface{}
+
+	switch v := value.GetValue().(type) {
+	case *v1.EncodedValue_IntResult:
+		decodedValue = v.IntResult
+	case *v1.EncodedValue_ShortResult:
+		decodedValue = v.ShortResult
+	case *v1.EncodedValue_LongResult:
+		decodedValue = v.LongResult
+	case *v1.EncodedValue_ByteResult:
+		// Protobuf seems to transmit bytes as int32
+		decodedValue = uint8(v.ByteResult)
+	case *v1.EncodedValue_BooleanResult:
+		decodedValue = v.BooleanResult
+	case *v1.EncodedValue_DoubleResult:
+		decodedValue = v.DoubleResult
+	case *v1.EncodedValue_FloatResult:
+		decodedValue = v.FloatResult
+	case *v1.EncodedValue_BinaryResult:
+		decodedValue = v.BinaryResult
+	case *v1.EncodedValue_StringResult:
+		decodedValue = v.StringResult
+	default:
+		return nil, errors.New(fmt.Sprintf("unable to decode type: %T", v))
+	}
+
+	return decodedValue, nil
 }
