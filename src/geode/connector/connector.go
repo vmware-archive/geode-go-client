@@ -30,7 +30,7 @@ func (this *Connector) Connect() (err error) {
 	// Use version 1 of the Geode protobuf protocol definition
 	_, err = this.connection.Write([]byte{0x6e, 0x01})
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("unable to write magic bytes: %s", err.Error()))
 	}
 
 	request := &v1.Request{
@@ -44,12 +44,12 @@ func (this *Connector) Connect() (err error) {
 
 	err = this.writeRequest(request)
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("unable to write handshake: %s", err.Error()))
 	}
 
 	response, err := this.readResponse()
 	if err != nil {
-		return err
+		return errors.New(fmt.Sprintf("unable to read handshake: %s", err.Error()))
 	}
 
 	if ! response.GetHandshakeResponse().GetHandshakePassed() {
