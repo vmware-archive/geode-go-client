@@ -8,8 +8,6 @@ import (
 	"fmt"
 )
 
-//go:generate counterfeiter net.Conn
-
 type Connector struct {
 	connection net.Conn
 }
@@ -23,19 +21,14 @@ func NewConnector(conn net.Conn) *Connector {
 	}
 }
 
-func (this *Connector) Connect() error {
+func (this *Connector) Connect() (err error) {
 	if this.connection == nil {
 		panic("connection is nil")
 	}
 
 	// Select protobuf communication
-	_, err := this.connection.Write([]byte{0x6e})
-	if err != nil {
-		return err
-	}
-
 	// Use version 1 of the Geode protobuf protocol definition
-	_, err = this.connection.Write([]byte{0x01})
+	_, err = this.connection.Write([]byte{0x6e, 0x01})
 	if err != nil {
 		return err
 	}
@@ -66,7 +59,7 @@ func (this *Connector) Connect() error {
 	return nil
 }
 
-func (this *Connector) Put(region string, k, v interface{}) error {
+func (this *Connector) Put(region string, k, v interface{}) (err error) {
 	key, err := getEncodedValue(k)
 	if err != nil {
 		return err
@@ -89,27 +82,41 @@ func (this *Connector) Put(region string, k, v interface{}) error {
 		},
 	}
 
-	this.writeRequest(put)
+	err = this.writeRequest(put)
 	if err != nil {
 		return err
+	}
+
+	response, err := this.readResponse()
+	if err != nil {
+		return err
+	}
+
+	if x := response.GetErrorResponse(); x != nil {
+		return errors.New(x.GetError().Message)
 	}
 
 	return nil
 }
 
-func (this *Connector) writeRequest(r *v1.Request) error {
+func (this *Connector) writeRequest(r *v1.Request) (err error) {
 	message := &v1.Message{
 		MessageType: &v1.Message_Request{
 			Request: r,
 		},
 	}
 
-	out, err := proto.Marshal(message)
-
-	_, err = this.connection.Write(out)
+	p := proto.NewBuffer(nil)
+	err = p.EncodeMessage(message)
 	if err != nil {
 		return err
 	}
+
+	_, err = this.connection.Write(p.Bytes())
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -120,9 +127,10 @@ func (this *Connector) readResponse() (*v1.Response, error) {
 		return nil, err
 	}
 
+	p := proto.NewBuffer(data[0:n])
 	response := &v1.Message{}
 
-	if err := proto.Unmarshal(data[0:n], response); err != nil {
+	if err := p.DecodeMessage(response); err != nil {
 		return nil, err
 	}
 
