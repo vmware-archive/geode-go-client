@@ -6,6 +6,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"errors"
 	"fmt"
+	"io"
 )
 
 type Connector struct {
@@ -161,12 +162,31 @@ func (this *Connector) writeRequest(r *v1.Request) (err error) {
 
 func (this *Connector) readResponse() (*v1.Response, error) {
 	data := make([]byte, 4096)
-	n, err := this.connection.Read(data)
+	bytesRead, err := this.connection.Read(data)
 	if err != nil {
 		return nil, err
 	}
 
-	p := proto.NewBuffer(data[0:n])
+	// Get the length of the message
+	m, n := proto.DecodeVarint(data)
+	messageLength := int(m) + n
+
+	if messageLength > len(data) {
+		t := make([]byte, len(data), messageLength)
+		copy(t, data)
+		data = t
+	}
+
+	for bytesRead < messageLength {
+		n, err := io.ReadFull(this.connection, data[bytesRead:messageLength])
+		if err != nil {
+			return nil, err
+		}
+
+		bytesRead += n
+	}
+
+	p := proto.NewBuffer(data[0:bytesRead])
 	response := &v1.Message{}
 
 	if err := p.DecodeMessage(response); err != nil {
