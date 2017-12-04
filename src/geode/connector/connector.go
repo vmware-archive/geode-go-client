@@ -61,12 +61,12 @@ func (this *Connector) Connect() (err error) {
 }
 
 func (this *Connector) Put(region string, k, v interface{}) (err error) {
-	key, err := GetEncodedValue(k)
+	key, err := EncodeValue(k)
 	if err != nil {
 		return err
 	}
 
-	value, err := GetEncodedValue(v)
+	value, err := EncodeValue(v)
 	if err != nil {
 		return err
 	}
@@ -83,25 +83,16 @@ func (this *Connector) Put(region string, k, v interface{}) (err error) {
 		},
 	}
 
-	err = this.writeRequest(put)
+	_, err = this.call(put)
 	if err != nil {
 		return err
-	}
-
-	response, err := this.readResponse()
-	if err != nil {
-		return err
-	}
-
-	if x := response.GetErrorResponse(); x != nil {
-		return errors.New(x.GetError().Message)
 	}
 
 	return nil
 }
 
 func (this *Connector) Get(region string, k interface{}) (interface{}, error) {
-	key, err := GetEncodedValue(k)
+	key, err := EncodeValue(k)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +106,47 @@ func (this *Connector) Get(region string, k interface{}) (interface{}, error) {
 		},
 	}
 
-	err = this.writeRequest(get)
+	response, err := this.call(get)
+	if err != nil {
+		return nil, err
+	}
+
+	v := response.GetGetResponse().GetResult()
+
+	decoded, err := DecodeValue(v)
+	if err != nil {
+		return nil, err
+	}
+
+	return decoded, nil
+}
+
+func (this *Connector) GetAll(region string, keys []interface{}) (*v1.GetAllResponse, error) {
+	encodedKeys, err := EncodeValues(keys)
+	if err != nil {
+		return nil, err
+	}
+
+	getAll := &v1.Request{
+		RequestAPI: &v1.Request_GetAllRequest{
+			GetAllRequest: &v1.GetAllRequest{
+				RegionName: region,
+				Key: encodedKeys,
+				CallbackArg: nil,
+			},
+		},
+	}
+
+	response, err := this.call(getAll)
+	if err != nil {
+		return nil, err
+	}
+
+	return response.GetGetAllResponse(), nil
+}
+
+func (this *Connector) call(request *v1.Request) (*v1.Response, error) {
+	err := this.writeRequest(request)
 	if err != nil {
 		return nil, err
 	}
@@ -126,17 +157,10 @@ func (this *Connector) Get(region string, k interface{}) (interface{}, error) {
 	}
 
 	if x := response.GetErrorResponse(); x != nil {
-		return nil, errors.New(x.GetError().Message)
+		return nil, errors.New(fmt.Sprintf("%s (%d)", x.GetError().Message, x.GetError().ErrorCode))
 	}
 
-	v := response.GetGetResponse().GetResult()
-
-	decoded, err := getDecodedValue(v)
-	if err != nil {
-		return nil, err
-	}
-
-	return decoded, nil
+	return response, nil
 }
 
 func (this *Connector) writeRequest(r *v1.Request) (err error) {
@@ -196,7 +220,20 @@ func (this *Connector) readResponse() (*v1.Response, error) {
 	return response.GetResponse(), nil
 }
 
-func GetEncodedValue(val interface{}) (*v1.EncodedValue, error) {
+func EncodeValues(values []interface{}) ([]*v1.EncodedValue, error) {
+	encodedValues := make([]*v1.EncodedValue, len(values))
+	for _, k := range values {
+		v, err := EncodeValue(k)
+		if err != nil {
+			return nil, err
+		}
+		encodedValues = append(encodedValues, v)
+	}
+
+	return encodedValues, nil
+}
+
+func EncodeValue(val interface{}) (*v1.EncodedValue, error) {
 	ev := &v1.EncodedValue{}
 
 	switch k := val.(type) {
@@ -229,7 +266,20 @@ func GetEncodedValue(val interface{}) (*v1.EncodedValue, error) {
 	return ev, nil
 }
 
-func getDecodedValue(value *v1.EncodedValue) (interface{}, error) {
+func DecodeValues(values []*v1.EncodedValue) ([]interface{}, error) {
+	decodedValues := make([]interface{}, len(values))
+	for _, k := range values {
+		v, err := DecodeValue(k)
+		if err != nil {
+			return nil, err
+		}
+		decodedValues = append(decodedValues, v)
+	}
+
+	return decodedValues, nil
+}
+
+func DecodeValue(value *v1.EncodedValue) (interface{}, error) {
 	var decodedValue interface{}
 
 	switch v := value.GetValue().(type) {
@@ -252,6 +302,8 @@ func getDecodedValue(value *v1.EncodedValue) (interface{}, error) {
 		decodedValue = v.BinaryResult
 	case *v1.EncodedValue_StringResult:
 		decodedValue = v.StringResult
+	case *v1.EncodedValue_CustomEncodedValue:
+		decodedValue = v.CustomEncodedValue
 	default:
 		return nil, errors.New(fmt.Sprintf("unable to decode type: %T", v))
 	}

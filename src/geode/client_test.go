@@ -35,7 +35,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				return writeResponse(response, b)
+				return writeFakeResponse(response, b)
 			}
 
 			Expect(client.Connect()).To(BeNil())
@@ -47,7 +47,7 @@ var _ = Describe("Client", func() {
 		It("does not return an error", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				response := &v1.Response{}
-				return writeResponse(response, b)
+				return writeFakeResponse(response, b)
 			}
 
 			Expect(client.Put("foo", "A", "B")).To(BeNil())
@@ -65,7 +65,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				return writeResponse(response, b)
+				return writeFakeResponse(response, b)
 			}
 
 			Expect(client.Put("foo", "A", "B")).To(MatchError("error from fake"))
@@ -84,25 +84,30 @@ var _ = Describe("Client", func() {
 				switch callCount {
 				case 0:
 					// Implicit int()
-					v, _ = connector.GetEncodedValue(1)
+					v, _ = connector.EncodeValue(1)
 				case 1:
-					v, _ = connector.GetEncodedValue(int16(2))
+					v, _ = connector.EncodeValue(int16(2))
 				case 2:
-					v, _ = connector.GetEncodedValue(int32(3))
+					v, _ = connector.EncodeValue(int32(3))
 				case 3:
-					v, _ = connector.GetEncodedValue(int64(4))
+					v, _ = connector.EncodeValue(int64(4))
 				case 4:
-					v, _ = connector.GetEncodedValue(byte(5))
+					v, _ = connector.EncodeValue(byte(5))
 				case 5:
-					v, _ = connector.GetEncodedValue(true)
+					v, _ = connector.EncodeValue(true)
 				case 6:
-					v, _ = connector.GetEncodedValue(float64(6))
+					v, _ = connector.EncodeValue(float64(6))
 				case 7:
-					v, _ = connector.GetEncodedValue(float32(7))
+					v, _ = connector.EncodeValue(float32(7))
 				case 8:
-					v, _ = connector.GetEncodedValue([]byte{8})
+					v, _ = connector.EncodeValue([]byte{8})
 				case 9:
-					v, _ = connector.GetEncodedValue("9")
+					v, _ = connector.EncodeValue("9")
+				case 10:
+					v, _ = connector.EncodeValue(&v1.CustomEncodedValue{
+						EncodingType: 10,
+						Value: []byte{1,2,3},
+					})
 				}
 				callCount += 1
 
@@ -113,7 +118,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				return writeResponse(response, b)
+				return writeFakeResponse(response, b)
 			}
 
 			Expect(client.Get("foo", "A")).To(Equal(int32(1)))
@@ -126,11 +131,68 @@ var _ = Describe("Client", func() {
 			Expect(client.Get("foo", "A")).To(Equal(float32(7)))
 			Expect(client.Get("foo", "A")).To(Equal([]byte{8}))
 			Expect(client.Get("foo", "A")).To(Equal("9"))
+
+			x, _ := client.Get("foo", "A")
+			encoded := x.(*v1.CustomEncodedValue)
+			Expect(int(encoded.EncodingType)).To(Equal(10))
+			Expect(encoded.Value).To(Equal([]byte{1, 2, 3}))
+		})
+	})
+
+	Context("GetAll", func() {
+		It("decodes values correctly", func() {
+			var callCount = 0
+			var v *v1.EncodedValue
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				switch callCount {
+				case 0:
+					// Implicit int()
+					v, _ = connector.EncodeValue(1)
+				case 1:
+					v, _ = connector.EncodeValue(int16(2))
+				case 2:
+					v, _ = connector.EncodeValue(int32(3))
+				case 3:
+					v, _ = connector.EncodeValue(int64(4))
+				case 4:
+					v, _ = connector.EncodeValue(byte(5))
+				case 5:
+					v, _ = connector.EncodeValue(true)
+				case 6:
+					v, _ = connector.EncodeValue(float64(6))
+				case 7:
+					v, _ = connector.EncodeValue(float32(7))
+				case 8:
+					v, _ = connector.EncodeValue([]byte{8})
+				case 9:
+					v, _ = connector.EncodeValue("9")
+				case 10:
+					v, _ = connector.EncodeValue(&v1.CustomEncodedValue{
+						EncodingType: 10,
+						Value: []byte{1,2,3},
+					})
+				}
+				callCount += 1
+
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_GetResponse{
+						GetResponse: &v1.GetResponse{
+							Result: v,
+						},
+					},
+				}
+				return writeFakeResponse(response, b)
+			}
+
+			keys := []interface{} {
+				"A", 11,
+			}
+			Expect(client.GetAll("foo", keys)).To(Equal(int32(1)))
 		})
 	})
 })
 
-func writeResponse(r *v1.Response, b []byte) (int, error) {
+func writeFakeResponse(r *v1.Response, b []byte) (int, error) {
 	response := &v1.Message{
 		MessageType: &v1.Message_Response{
 			Response: r,
