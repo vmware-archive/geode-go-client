@@ -121,10 +121,10 @@ func (this *Connector) Get(region string, k interface{}) (interface{}, error) {
 	return decoded, nil
 }
 
-func (this *Connector) GetAll(region string, keys []interface{}) (*v1.GetAllResponse, error) {
+func (this *Connector) GetAll(region string, keys []interface{}) (map[interface{}]interface{}, map[interface{}]error, error) {
 	encodedKeys, err := EncodeValues(keys)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	getAll := &v1.Request{
@@ -139,10 +139,95 @@ func (this *Connector) GetAll(region string, keys []interface{}) (*v1.GetAllResp
 
 	response, err := this.call(getAll)
 	if err != nil {
+		return nil, nil, err
+	}
+
+	decodedEntries := make(map[interface{}]interface{})
+	decodedFailures := make(map[interface{}]error)
+
+	for _, entry := range response.GetGetAllResponse().Entries {
+		key, err := DecodeValue(entry.Key)
+		if err != nil {
+			return nil, nil, errors.New(fmt.Sprintf("unable to decode GetAll response key: %s", err.Error()))
+		}
+
+		value, err := DecodeValue(entry.Value)
+		if err != nil {
+			decodedFailures[key] = errors.New(fmt.Sprintf("unable to decode GetAll value for key: %v: %s", key, err.Error()))
+			continue
+		}
+
+		decodedEntries[key] = value
+	}
+
+	for _, failure := range response.GetGetAllResponse().Failures {
+		key, err := DecodeValue(failure.Key)
+		if err != nil {
+			return nil, nil, errors.New(fmt.Sprintf("unable to decode GetAll failure response for key: %v: %s", failure.Key, err.Error()))
+		}
+
+		decodedFailures[key] = errors.New(fmt.Sprintf("%s (%d)", failure.Error.Message, failure.Error.ErrorCode))
+	}
+
+	if len(decodedFailures) == 0 {
+		return decodedEntries, nil, nil
+	}
+
+	return decodedEntries, decodedFailures, nil
+}
+
+func (this *Connector) PutAll(region string, entries map[interface{}]interface{}) (map[interface{}]error, error) {
+	encodedEntries := make([]*v1.Entry, 0)
+
+	for k, v := range entries {
+		key, err := EncodeValue(k)
+		if err != nil {
+			return nil, err
+		}
+
+		value, err := EncodeValue(v)
+		if err != nil {
+			return nil, err
+		}
+
+		e := &v1.Entry{
+			Key: key,
+			Value: value,
+		}
+
+		encodedEntries = append(encodedEntries, e)
+	}
+
+	putAll := &v1.Request{
+		RequestAPI: &v1.Request_PutAllRequest{
+			PutAllRequest: &v1.PutAllRequest{
+				RegionName: region,
+				Entry: encodedEntries,
+			},
+		},
+	}
+
+	r, err := this.call(putAll)
+	if err != nil {
 		return nil, err
 	}
 
-	return response.GetGetAllResponse(), nil
+	response := r.GetPutAllResponse()
+	failures := make(map[interface{}]error)
+	for _, k := range response.GetFailedKeys() {
+		key, err := DecodeValue(k.Key)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("unable to decode failed PutAll response key: %s", err.Error()))
+		}
+
+		failures[key] = errors.New(fmt.Sprintf("%s (%d)", k.GetError().Message, k.GetError().ErrorCode))
+	}
+
+	if len(failures) == 0 {
+		return nil, nil
+	}
+
+	return failures, nil
 }
 
 func (this *Connector) call(request *v1.Request) (*v1.Response, error) {
@@ -221,7 +306,7 @@ func (this *Connector) readResponse() (*v1.Response, error) {
 }
 
 func EncodeValues(values []interface{}) ([]*v1.EncodedValue, error) {
-	encodedValues := make([]*v1.EncodedValue, len(values))
+	encodedValues := make([]*v1.EncodedValue, 0, len(values))
 	for _, k := range values {
 		v, err := EncodeValue(k)
 		if err != nil {
@@ -304,6 +389,8 @@ func DecodeValue(value *v1.EncodedValue) (interface{}, error) {
 		decodedValue = v.StringResult
 	case *v1.EncodedValue_CustomEncodedValue:
 		decodedValue = v.CustomEncodedValue
+	case nil:
+		decodedValue = nil
 	default:
 		return nil, errors.New(fmt.Sprintf("unable to decode type: %T", v))
 	}

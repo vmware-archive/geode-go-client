@@ -24,3 +24,7 @@ func (this *Client) Get(region string, key interface{}) (interface{}, error) {
 	return this.connector.Get(region, key)
 }
 
+func (this *Client) GetAll(region string, keys []interface{}) (map[interface{}]interface{}, map[interface{}]error, error) {
+	return this.connector.GetAll(region, keys)
+}
+

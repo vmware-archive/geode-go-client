@@ -137,45 +137,90 @@ var _ = Describe("Client", func() {
 		})
 	})
 
-	Context("GetAll", func() {
-		XIt("decodes values correctly", func() {
-			var callCount = 0
-			var v *v1.EncodedValue
+	Context("PutAll", func() {
+		It("encodes values correctly", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				switch callCount {
-				case 0:
-					// Implicit int()
-					v, _ = connector.EncodeValue(1)
-				case 1:
-					v, _ = connector.EncodeValue(int16(2))
-				case 2:
-					v, _ = connector.EncodeValue(int32(3))
-				case 3:
-					v, _ = connector.EncodeValue(int64(4))
-				case 4:
-					v, _ = connector.EncodeValue(byte(5))
-				case 5:
-					v, _ = connector.EncodeValue(true)
-				case 6:
-					v, _ = connector.EncodeValue(float64(6))
-				case 7:
-					v, _ = connector.EncodeValue(float32(7))
-				case 8:
-					v, _ = connector.EncodeValue([]byte{8})
-				case 9:
-					v, _ = connector.EncodeValue("9")
-				case 10:
-					v, _ = connector.EncodeValue(&v1.CustomEncodedValue{
-						EncodingType: 10,
-						Value: []byte{1,2,3},
-					})
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_PutAllResponse{
+						PutAllResponse: &v1.PutAllResponse{
+							FailedKeys: make([]*v1.KeyedError, 0),
+						},
+					},
 				}
-				callCount += 1
+
+				return writeFakeResponse(response, b)
+			}
+
+			entries := make(map[interface{}]interface{}, 0)
+			response, err := connection.PutAll("foo", entries)
+			Expect(err).To(BeNil())
+			Expect(response).To(BeNil())
+		})
+
+		It("reports protobuf encoding errors correctly", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_PutAllResponse{
+						PutAllResponse: &v1.PutAllResponse{
+							FailedKeys: nil,
+						},
+					},
+				}
+
+				return writeFakeResponse(response, b)
+			}
+
+			entries := make(map[interface{}]interface{}, 0)
+			entries[0] = struct{}{}
+
+			_, err := connection.PutAll("foo", entries)
+			Expect(err.Error()).To(Equal("unable to encode type: struct {}"))
+		})
+
+		It("reports correctly failing entries", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				failedKeys := make([]*v1.KeyedError, 0)
+				failedKey, _ := connector.EncodeValue(77)
+				failedKeys = append(failedKeys, &v1.KeyedError{
+					Key: failedKey,
+					Error: &v1.Error{
+						ErrorCode: 1,
+						Message:   "test error",
+					},
+				})
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_PutAllResponse{
+						PutAllResponse: &v1.PutAllResponse{
+							FailedKeys: failedKeys,
+						},
+					},
+				}
+
+				return writeFakeResponse(response, b)
+			}
+
+			entries := make(map[interface{}]interface{})
+			entries[77] = "yabba dabba doo"
+
+			failures, err := connection.PutAll("foo", entries)
+
+			Expect(err).To(BeNil())
+			Expect(failures[int32(77)]).NotTo(BeNil())
+			Expect(failures[int32(77)].Error()).To(Equal("test error (1)"))
+		})
+	})
+
+	Context("GetAll", func() {
+		It("responds correctly with empty results", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				entries := make([]*v1.Entry, 0)
+				failures := make([]*v1.KeyedError, 0)
 
 				response := &v1.Response{
-					ResponseAPI: &v1.Response_GetResponse{
-						GetResponse: &v1.GetResponse{
-							Result: v,
+					ResponseAPI: &v1.Response_GetAllResponse{
+						GetAllResponse: &v1.GetAllResponse{
+							Entries: entries,
+							Failures: failures,
 						},
 					},
 				}
@@ -185,7 +230,54 @@ var _ = Describe("Client", func() {
 			keys := []interface{} {
 				"A", 11,
 			}
-			Expect(connection.GetAll("foo", keys)).To(Equal(int32(1)))
+			entries, failures, err := connection.GetAll("foo", keys)
+
+			Expect(err).To(BeNil())
+			Expect(len(entries)).To(Equal(0))
+			Expect(len(failures)).To(Equal(0))
+		})
+
+		It("responds with correctly decoded results", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				entries := make([]*v1.Entry, 0)
+				k, _ := connector.EncodeValue("A")
+				v, _:= connector.EncodeValue(888)
+				entries = append(entries, &v1.Entry{
+					Key: k,
+					Value: v,
+				})
+
+				failures := make([]*v1.KeyedError, 0)
+				k2, _ := connector.EncodeValue(11)
+				failures = append(failures, &v1.KeyedError{
+					Key: k2,
+					Error: &v1.Error{
+						ErrorCode: 1,
+						Message: "getall failure",
+					},
+				})
+
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_GetAllResponse{
+						GetAllResponse: &v1.GetAllResponse{
+							Entries: entries,
+							Failures: failures,
+						},
+					},
+				}
+				return writeFakeResponse(response, b)
+			}
+
+			keys := []interface{} {
+				"A", 11,
+			}
+			entries, failures, err := connection.GetAll("foo", keys)
+
+			Expect(err).To(BeNil())
+			Expect(len(entries)).To(Equal(1))
+			Expect(entries["A"]).To(Equal(int32(888)))
+			Expect(len(failures)).To(Equal(1))
+			Expect(failures[int32(11)].Error()).To(Equal("getall failure (1)"))
 		})
 	})
 })
