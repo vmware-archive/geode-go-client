@@ -1,4 +1,4 @@
-package geode_test
+package connector_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestGeodeClient(t *testing.T) {
+func TestConnector(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "GeodeClient Suite")
+	RunSpecs(t, "Connector Suite")
 }
