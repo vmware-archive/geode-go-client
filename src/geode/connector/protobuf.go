@@ -10,6 +10,8 @@ import (
 	"reflect"
 )
 
+// A Protobuf connector provides the low-level interface between a Client and the backend Geode servers.
+// It should not be used directly; rather the Client API should be used.
 type Protobuf struct {
 	connection net.Conn
 }
