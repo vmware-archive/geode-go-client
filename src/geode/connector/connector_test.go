@@ -44,7 +44,11 @@ var _ = Describe("Client", func() {
 	Context("Put", func() {
 		It("does not return an error", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{}
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_PutResponse{
+						PutResponse: &v1.PutResponse{},
+					},
+				}
 				return writeFakeResponse(response, b)
 			}
 
@@ -170,10 +174,10 @@ var _ = Describe("Client", func() {
 				return writeFakeResponse(response, b)
 			}
 
-			entries := make(map[interface{}]interface{}, 0)
-			entries[0] = struct{}{}
+			var entries = map[int]struct{}{0: {}}
 
 			_, err := connection.PutAll("foo", entries)
+			Expect(err).ToNot(BeNil())
 			Expect(err.Error()).To(Equal("unable to encode type: struct {}"))
 		})
 
@@ -278,6 +282,52 @@ var _ = Describe("Client", func() {
 			Expect(entries["A"]).To(Equal(int32(888)))
 			Expect(len(failures)).To(Equal(1))
 			Expect(failures[int32(11)].Error()).To(Equal("getall failure (1)"))
+		})
+	})
+
+	Context("Remove", func() {
+		It("does not return an error", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_RemoveResponse{
+						RemoveResponse: &v1.RemoveResponse{},
+					},
+				}
+				return writeFakeResponse(response, b)
+			}
+
+			Expect(connection.Remove("foo", "A")).To(BeNil())
+		})
+
+		It("returns error on invalid key type", func() {
+			errResult := connection.Remove("foo", struct{}{})
+
+			Expect(errResult).ToNot(BeNil())
+			Expect(errResult.Error()).To(Equal("unable to encode type: struct {}"))
+		})
+	})
+
+	Context("RemoveAll", func() {
+		It("does not return an error", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_RemoveAllResponse{
+						RemoveAllResponse: &v1.RemoveAllResponse{},
+					},
+				}
+				return writeFakeResponse(response, b)
+			}
+
+			Expect(connection.Remove("foo", "A")).To(BeNil())
+		})
+
+		It("returns error on invalid key type", func() {
+			var x = []interface{} {struct{}{}}
+
+			errResult := connection.RemoveAll("foo", x)
+
+			Expect(errResult).ToNot(BeNil())
+			Expect(errResult.Error()).To(Equal("unable to encode type: struct {}"))
 		})
 	})
 })

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 )
 
 type Connector struct {
@@ -121,10 +122,20 @@ func (this *Connector) Get(region string, k interface{}) (interface{}, error) {
 	return decoded, nil
 }
 
-func (this *Connector) GetAll(region string, keys []interface{}) (map[interface{}]interface{}, map[interface{}]error, error) {
-	encodedKeys, err := EncodeValues(keys)
-	if err != nil {
-		return nil, nil, err
+func (this *Connector) GetAll(region string, keys interface{}) (map[interface{}]interface{}, map[interface{}]error, error) {
+	keySlice := reflect.ValueOf(keys)
+	if keySlice.Kind() != reflect.Slice && keySlice.Kind() != reflect.Array {
+		return nil, nil, errors.New("keys must be a slice or array")
+	}
+
+	encodedKeys := make([]*v1.EncodedValue, 0, keySlice.Len())
+	for i := 0; i < keySlice.Len(); i++ {
+		key, err := EncodeValue(keySlice.Index(i).Interface())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		encodedKeys = append(encodedKeys, key)
 	}
 
 	getAll := &v1.Request{
@@ -176,16 +187,22 @@ func (this *Connector) GetAll(region string, keys []interface{}) (map[interface{
 	return decodedEntries, decodedFailures, nil
 }
 
-func (this *Connector) PutAll(region string, entries map[interface{}]interface{}) (map[interface{}]error, error) {
+func (this *Connector) PutAll(region string, entries interface{}) (map[interface{}]error, error) {
+	// Check if we have a map
+	entriesMap := reflect.ValueOf(entries)
+	if entriesMap.Kind() != reflect.Map {
+		return nil, errors.New("entries must be a map")
+	}
+
 	encodedEntries := make([]*v1.Entry, 0)
 
-	for k, v := range entries {
-		key, err := EncodeValue(k)
+	for _, k := range entriesMap.MapKeys() {
+		key, err := EncodeValue(k.Interface())
 		if err != nil {
 			return nil, err
 		}
 
-		value, err := EncodeValue(v)
+		value, err := EncodeValue(entriesMap.MapIndex(k).Interface())
 		if err != nil {
 			return nil, err
 		}
@@ -228,6 +245,56 @@ func (this *Connector) PutAll(region string, entries map[interface{}]interface{}
 	}
 
 	return failures, nil
+}
+
+func (this *Connector) Remove(region string, k interface{}) error {
+	key, err := EncodeValue(k)
+	if err != nil {
+		return err
+	}
+
+	remove := &v1.Request{
+		RequestAPI: &v1.Request_RemoveRequest{
+			RemoveRequest: &v1.RemoveRequest{
+				RegionName: region,
+				Key:        key,
+			},
+		},
+	}
+
+	_, err = this.call(remove)
+
+	return err
+}
+
+func (this *Connector) RemoveAll(region string, keys interface{}) error {
+	keySlice := reflect.ValueOf(keys)
+	if keySlice.Kind() != reflect.Slice && keySlice.Kind() != reflect.Array {
+		return errors.New("keys must be a slice or array")
+	}
+
+	encodedKeys := make([]*v1.EncodedValue, 0, keySlice.Len())
+	for i := 0; i < keySlice.Len(); i++ {
+		key, err := EncodeValue(keySlice.Index(i).Interface())
+		if err != nil {
+			return err
+		}
+
+		encodedKeys = append(encodedKeys, key)
+	}
+
+	removeAll := &v1.Request{
+		RequestAPI: &v1.Request_RemoveAllRequest{
+			RemoveAllRequest: &v1.RemoveAllRequest{
+				RegionName: region,
+				Key: encodedKeys,
+			},
+		},
+	}
+
+	_, err := this.call(removeAll)
+
+	return err
 }
 
 func (this *Connector) call(request *v1.Request) (*v1.Response, error) {
