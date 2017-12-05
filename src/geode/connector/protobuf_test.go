@@ -13,7 +13,7 @@ import (
 
 var _ = Describe("Client", func() {
 
-	var connection *connector.Connector
+	var connection *connector.Protobuf
 	var fakeConn *connectorfakes.FakeConn
 
 	BeforeEach(func() {

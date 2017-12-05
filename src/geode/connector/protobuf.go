@@ -10,20 +10,20 @@ import (
 	"reflect"
 )
 
-type Connector struct {
+type Protobuf struct {
 	connection net.Conn
 }
 
 var MAJOR_VERSION int32 = 1
 var MINOR_VERSION int32 = 1
 
-func NewConnector(conn net.Conn) *Connector {
-	return &Connector{
+func NewConnector(conn net.Conn) *Protobuf {
+	return &Protobuf{
 		connection: conn,
 	}
 }
 
-func (this *Connector) Connect() (err error) {
+func (this *Protobuf) Connect() (err error) {
 	if this.connection == nil {
 		panic("connection is nil")
 	}
@@ -61,7 +61,7 @@ func (this *Connector) Connect() (err error) {
 	return nil
 }
 
-func (this *Connector) Put(region string, k, v interface{}) (err error) {
+func (this *Protobuf) Put(region string, k, v interface{}) (err error) {
 	key, err := EncodeValue(k)
 	if err != nil {
 		return err
@@ -92,7 +92,7 @@ func (this *Connector) Put(region string, k, v interface{}) (err error) {
 	return nil
 }
 
-func (this *Connector) Get(region string, k interface{}) (interface{}, error) {
+func (this *Protobuf) Get(region string, k interface{}) (interface{}, error) {
 	key, err := EncodeValue(k)
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func (this *Connector) Get(region string, k interface{}) (interface{}, error) {
 	return decoded, nil
 }
 
-func (this *Connector) GetAll(region string, keys interface{}) (map[interface{}]interface{}, map[interface{}]error, error) {
+func (this *Protobuf) GetAll(region string, keys interface{}) (map[interface{}]interface{}, map[interface{}]error, error) {
 	keySlice := reflect.ValueOf(keys)
 	if keySlice.Kind() != reflect.Slice && keySlice.Kind() != reflect.Array {
 		return nil, nil, errors.New("keys must be a slice or array")
@@ -187,7 +187,7 @@ func (this *Connector) GetAll(region string, keys interface{}) (map[interface{}]
 	return decodedEntries, decodedFailures, nil
 }
 
-func (this *Connector) PutAll(region string, entries interface{}) (map[interface{}]error, error) {
+func (this *Protobuf) PutAll(region string, entries interface{}) (map[interface{}]error, error) {
 	// Check if we have a map
 	entriesMap := reflect.ValueOf(entries)
 	if entriesMap.Kind() != reflect.Map {
@@ -247,7 +247,7 @@ func (this *Connector) PutAll(region string, entries interface{}) (map[interface
 	return failures, nil
 }
 
-func (this *Connector) Remove(region string, k interface{}) error {
+func (this *Protobuf) Remove(region string, k interface{}) error {
 	key, err := EncodeValue(k)
 	if err != nil {
 		return err
@@ -267,7 +267,7 @@ func (this *Connector) Remove(region string, k interface{}) error {
 	return err
 }
 
-func (this *Connector) RemoveAll(region string, keys interface{}) error {
+func (this *Protobuf) RemoveAll(region string, keys interface{}) error {
 	keySlice := reflect.ValueOf(keys)
 	if keySlice.Kind() != reflect.Slice && keySlice.Kind() != reflect.Array {
 		return errors.New("keys must be a slice or array")
@@ -297,7 +297,7 @@ func (this *Connector) RemoveAll(region string, keys interface{}) error {
 	return err
 }
 
-func (this *Connector) call(request *v1.Request) (*v1.Response, error) {
+func (this *Protobuf) call(request *v1.Request) (*v1.Response, error) {
 	err := this.writeRequest(request)
 	if err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func (this *Connector) call(request *v1.Request) (*v1.Response, error) {
 	return response, nil
 }
 
-func (this *Connector) writeRequest(r *v1.Request) (err error) {
+func (this *Protobuf) writeRequest(r *v1.Request) (err error) {
 	message := &v1.Message{
 		MessageType: &v1.Message_Request{
 			Request: r,
@@ -336,7 +336,7 @@ func (this *Connector) writeRequest(r *v1.Request) (err error) {
 	return nil
 }
 
-func (this *Connector) readResponse() (*v1.Response, error) {
+func (this *Protobuf) readResponse() (*v1.Response, error) {
 	data := make([]byte, 4096)
 	bytesRead, err := this.connection.Read(data)
 	if err != nil {
