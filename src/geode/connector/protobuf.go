@@ -374,19 +374,6 @@ func (this *Protobuf) readResponse(connection net.Conn) (*v1.Response, error) {
 	return response.GetResponse(), nil
 }
 
-func EncodeValues(values []interface{}) ([]*v1.EncodedValue, error) {
-	encodedValues := make([]*v1.EncodedValue, 0, len(values))
-	for _, k := range values {
-		v, err := EncodeValue(k)
-		if err != nil {
-			return nil, err
-		}
-		encodedValues = append(encodedValues, v)
-	}
-
-	return encodedValues, nil
-}
-
 func EncodeValue(val interface{}) (*v1.EncodedValue, error) {
 	ev := &v1.EncodedValue{}
 
@@ -418,19 +405,6 @@ func EncodeValue(val interface{}) (*v1.EncodedValue, error) {
 	}
 
 	return ev, nil
-}
-
-func DecodeValues(values []*v1.EncodedValue) ([]interface{}, error) {
-	decodedValues := make([]interface{}, len(values))
-	for _, k := range values {
-		v, err := DecodeValue(k)
-		if err != nil {
-			return nil, err
-		}
-		decodedValues = append(decodedValues, v)
-	}
-
-	return decodedValues, nil
 }
 
 func DecodeValue(value *v1.EncodedValue) (interface{}, error) {
