@@ -13,26 +13,24 @@ import (
 // A Protobuf connector provides the low-level interface between a Client and the backend Geode servers.
 // It should not be used directly; rather the Client API should be used.
 type Protobuf struct {
-	connection net.Conn
+	pool *Pool
 }
 
 var MAJOR_VERSION int32 = 1
 var MINOR_VERSION int32 = 1
 
-func NewConnector(conn net.Conn) *Protobuf {
+func NewConnector(pool *Pool) *Protobuf {
 	return &Protobuf{
-		connection: conn,
+		pool: pool,
 	}
 }
 
-func (this *Protobuf) Connect() (err error) {
-	if this.connection == nil {
-		panic("connection is nil")
-	}
+func (this *Protobuf) Handshake() (err error) {
+	connection := this.pool.GetConnection()
 
 	// Select protobuf communication
 	// Use version 1 of the Geode protobuf protocol definition
-	_, err = this.connection.Write([]byte{0x6e, 0x01})
+	_, err = connection.Write([]byte{0x6e, 0x01})
 	if err != nil {
 		return errors.New(fmt.Sprintf("unable to write magic bytes: %s", err.Error()))
 	}
@@ -46,12 +44,12 @@ func (this *Protobuf) Connect() (err error) {
 		},
 	}
 
-	err = this.writeRequest(request)
+	err = this.writeRequest(connection, request)
 	if err != nil {
 		return errors.New(fmt.Sprintf("unable to write handshake: %s", err.Error()))
 	}
 
-	response, err := this.readResponse()
+	response, err := this.readResponse(connection)
 	if err != nil {
 		return errors.New(fmt.Sprintf("unable to read handshake: %s", err.Error()))
 	}
@@ -86,7 +84,7 @@ func (this *Protobuf) Put(region string, k, v interface{}) (err error) {
 		},
 	}
 
-	_, err = this.call(put)
+	_, err = this.doOperation(put)
 	if err != nil {
 		return err
 	}
@@ -109,7 +107,7 @@ func (this *Protobuf) Get(region string, k interface{}) (interface{}, error) {
 		},
 	}
 
-	response, err := this.call(get)
+	response, err := this.doOperation(get)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +148,7 @@ func (this *Protobuf) GetAll(region string, keys interface{}) (map[interface{}]i
 		},
 	}
 
-	response, err := this.call(getAll)
+	response, err := this.doOperation(getAll)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -226,7 +224,7 @@ func (this *Protobuf) PutAll(region string, entries interface{}) (map[interface{
 		},
 	}
 
-	r, err := this.call(putAll)
+	r, err := this.doOperation(putAll)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +262,7 @@ func (this *Protobuf) Remove(region string, k interface{}) error {
 		},
 	}
 
-	_, err = this.call(remove)
+	_, err = this.doOperation(remove)
 
 	return err
 }
@@ -294,18 +292,20 @@ func (this *Protobuf) RemoveAll(region string, keys interface{}) error {
 		},
 	}
 
-	_, err := this.call(removeAll)
+	_, err := this.doOperation(removeAll)
 
 	return err
 }
 
-func (this *Protobuf) call(request *v1.Request) (*v1.Response, error) {
-	err := this.writeRequest(request)
+func (this *Protobuf) doOperation(request *v1.Request) (*v1.Response, error) {
+	connection := this.pool.GetConnection()
+
+	err := this.writeRequest(connection, request)
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := this.readResponse()
+	response, err := this.readResponse(connection)
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +317,7 @@ func (this *Protobuf) call(request *v1.Request) (*v1.Response, error) {
 	return response, nil
 }
 
-func (this *Protobuf) writeRequest(r *v1.Request) (err error) {
+func (this *Protobuf) writeRequest(connection net.Conn, r *v1.Request) (err error) {
 	message := &v1.Message{
 		MessageType: &v1.Message_Request{
 			Request: r,
@@ -330,7 +330,7 @@ func (this *Protobuf) writeRequest(r *v1.Request) (err error) {
 		return err
 	}
 
-	_, err = this.connection.Write(p.Bytes())
+	_, err = connection.Write(p.Bytes())
 	if err != nil {
 		return err
 	}
@@ -338,9 +338,9 @@ func (this *Protobuf) writeRequest(r *v1.Request) (err error) {
 	return nil
 }
 
-func (this *Protobuf) readResponse() (*v1.Response, error) {
+func (this *Protobuf) readResponse(connection net.Conn) (*v1.Response, error) {
 	data := make([]byte, 4096)
-	bytesRead, err := this.connection.Read(data)
+	bytesRead, err := connection.Read(data)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +356,7 @@ func (this *Protobuf) readResponse() (*v1.Response, error) {
 	}
 
 	for bytesRead < messageLength {
-		n, err := io.ReadFull(this.connection, data[bytesRead:messageLength])
+		n, err := io.ReadFull(connection, data[bytesRead:messageLength])
 		if err != nil {
 			return nil, err
 		}

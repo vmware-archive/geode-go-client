@@ -33,7 +33,7 @@ func NewGeodeClient(c *connector.Protobuf) *Client {
 
 // Connect attempts to connect with a Geode cluster using the protobuf protocol.
 func (this *Client) Connect() error {
-	return this.connector.Connect()
+	return this.connector.Handshake()
 }
 
 // Put data into a region. key and value must be a supported type.

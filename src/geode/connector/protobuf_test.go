@@ -18,7 +18,8 @@ var _ = Describe("Client", func() {
 
 	BeforeEach(func() {
 		fakeConn = new(connectorfakes.FakeConn)
-		connection = connector.NewConnector(fakeConn)
+		pool := connector.NewPool(fakeConn)
+		connection = connector.NewConnector(pool)
 	})
 
 	Context("Connect", func() {
@@ -36,7 +37,7 @@ var _ = Describe("Client", func() {
 				return writeFakeResponse(response, b)
 			}
 
-			Expect(connection.Connect()).To(BeNil())
+			Expect(connection.Handshake()).To(BeNil())
 			Expect(fakeConn.WriteCallCount()).To(Equal(2))
 		})
 	})
