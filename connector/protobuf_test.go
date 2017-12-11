@@ -329,6 +329,29 @@ var _ = Describe("Client", func() {
 	//		Expect(errResult.Error()).To(Equal("unable to encode type: struct {}"))
 	//	})
 	//})
+
+	Context("Size", func() {
+		It("returns the correct region size", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_GetRegionResponse{
+						GetRegionResponse: &v1.GetRegionResponse{
+							Region: &v1.Region{
+								Size: 77,
+							},
+						},
+					},
+				}
+				return writeFakeResponse(response, b)
+			}
+
+			size, err := connection.Size("foo")
+
+			Expect(err).To(BeNil())
+			var expected int64 = 77
+			Expect(size).To(Equal(expected))
+		})
+	})
 })
 
 func writeFakeResponse(r *v1.Response, b []byte) (int, error) {

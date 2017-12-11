@@ -294,6 +294,25 @@ func (this *Protobuf) Remove(region string, k interface{}) error {
 //	return err
 //}
 
+func (this *Protobuf) Size(r string) (int64, error) {
+	request := &v1.Request{
+		RequestAPI: &v1.Request_GetRegionRequest{
+			GetRegionRequest: &v1.GetRegionRequest{
+				RegionName: r,
+			},
+		},
+	}
+
+	response, err := this.doOperation(request)
+	if err != nil {
+		return 0, err
+	}
+
+	region := response.GetGetRegionResponse().GetRegion()
+
+	return region.GetSize(), nil
+}
+
 func (this *Protobuf) doOperation(request *v1.Request) (*v1.Response, error) {
 	connection := this.pool.GetConnection()
 
