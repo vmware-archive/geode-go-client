@@ -21,6 +21,7 @@ import "github.com/gemfire/geode-go-client/connector"
 // property:
 //
 //     geode.feature-protobuf-protocol=true
+//
 type Client struct {
 	connector *connector.Protobuf
 }
@@ -70,6 +71,7 @@ func (this *Client) Remove(region string, key interface{}) error {
 }
 
 // Remove many entries from a region. The keys must be passed as an array or slice.
-func (this *Client) RemoveAll(region string, keys interface{}) error {
-	return this.connector.RemoveAll(region, keys)
-}
+// Currently still being implemented in Geode.
+//func (this *Client) RemoveAll(region string, keys interface{}) error {
+//	return this.connector.RemoveAll(region, keys)
+//}

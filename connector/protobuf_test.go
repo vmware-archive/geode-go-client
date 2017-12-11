@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
+	"github.com/gemfire/geode-go-client/protobuf"
 	"github.com/gemfire/geode-go-client/connector"
 	"github.com/golang/protobuf/proto"
 	"github.com/gemfire/geode-go-client/connector/connectorfakes"
@@ -25,20 +26,16 @@ var _ = Describe("Client", func() {
 	Context("Connect", func() {
 		It("does not return an error", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_HandshakeResponse{
-						HandshakeResponse: &v1.HandshakeResponse{
-							ServerMajorVersion: 1,
-							ServerMinorVersion: 1,
-							HandshakePassed:    true,
-						},
-					},
+				ack := &org_apache_geode_internal_protocol_protobuf.HandshakeAcknowledgement{
+					ServerMajorVersion: 1,
+					ServerMinorVersion: 1,
+					HandshakePassed:    true,
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(ack, b)
 			}
 
 			Expect(connection.Handshake()).To(BeNil())
-			Expect(fakeConn.WriteCallCount()).To(Equal(2))
+			Expect(fakeConn.WriteCallCount()).To(Equal(1))
 		})
 	})
 
@@ -308,29 +305,30 @@ var _ = Describe("Client", func() {
 		})
 	})
 
-	Context("RemoveAll", func() {
-		It("does not return an error", func() {
-			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_RemoveAllResponse{
-						RemoveAllResponse: &v1.RemoveAllResponse{},
-					},
-				}
-				return writeFakeResponse(response, b)
-			}
-
-			Expect(connection.Remove("foo", "A")).To(BeNil())
-		})
-
-		It("returns error on invalid key type", func() {
-			var x = []interface{} {struct{}{}}
-
-			errResult := connection.RemoveAll("foo", x)
-
-			Expect(errResult).ToNot(BeNil())
-			Expect(errResult.Error()).To(Equal("unable to encode type: struct {}"))
-		})
-	})
+	// This functionality is coming back...
+	//Context("RemoveAll", func() {
+	//	It("does not return an error", func() {
+	//		fakeConn.ReadStub = func(b []byte) (int, error) {
+	//			response := &v1.Response{
+	//				ResponseAPI: &v1.Response_RemoveAllResponse{
+	//					RemoveAllResponse: &v1.RemoveAllResponse{},
+	//				},
+	//			}
+	//			return writeFakeResponse(response, b)
+	//		}
+	//
+	//		Expect(connection.Remove("foo", "A")).To(BeNil())
+	//	})
+	//
+	//	It("returns error on invalid key type", func() {
+	//		var x = []interface{} {struct{}{}}
+	//
+	//		errResult := connection.RemoveAll("foo", x)
+	//
+	//		Expect(errResult).ToNot(BeNil())
+	//		Expect(errResult.Error()).To(Equal("unable to encode type: struct {}"))
+	//	})
+	//})
 })
 
 func writeFakeResponse(r *v1.Response, b []byte) (int, error) {
@@ -339,8 +337,13 @@ func writeFakeResponse(r *v1.Response, b []byte) (int, error) {
 			Response: r,
 		},
 	}
+
+	return writeFakeMessage(response, b)
+}
+
+func writeFakeMessage(m proto.Message, b []byte) (int, error) {
 	p := proto.NewBuffer(nil)
-	p.EncodeMessage(response)
+	p.EncodeMessage(m)
 	n := copy(b, p.Bytes())
 
 	return n, nil

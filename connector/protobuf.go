@@ -3,6 +3,7 @@ package connector
 import (
 	"net"
 	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
+	"github.com/gemfire/geode-go-client/protobuf"
 	"github.com/golang/protobuf/proto"
 	"errors"
 	"fmt"
@@ -16,8 +17,8 @@ type Protobuf struct {
 	pool *Pool
 }
 
-var MAJOR_VERSION int32 = 1
-var MINOR_VERSION int32 = 1
+var MAJOR_VERSION uint32 = 1
+var MINOR_VERSION uint32 = 1
 
 func NewConnector(pool *Pool) *Protobuf {
 	return &Protobuf{
@@ -28,33 +29,29 @@ func NewConnector(pool *Pool) *Protobuf {
 func (this *Protobuf) Handshake() (err error) {
 	connection := this.pool.GetConnection()
 
-	// Select protobuf communication
-	// Use version 1 of the Geode protobuf protocol definition
-	_, err = connection.Write([]byte{0x6e, 0x01})
-	if err != nil {
-		return errors.New(fmt.Sprintf("unable to write magic bytes: %s", err.Error()))
+	request := &org_apache_geode_internal_protocol_protobuf.NewConnectionHandshake{
+		MajorVersion: MAJOR_VERSION,
+		MinorVersion: MINOR_VERSION,
 	}
 
-	request := &v1.Request{
-		RequestAPI: &v1.Request_HandshakeRequest{
-			HandshakeRequest: &v1.HandshakeRequest{
-				MajorVersion: MAJOR_VERSION,
-				MinorVersion: MINOR_VERSION,
-			},
-		},
-	}
-
-	err = this.writeRequest(connection, request)
+	err = this.writeMessage(connection, request)
 	if err != nil {
 		return errors.New(fmt.Sprintf("unable to write handshake: %s", err.Error()))
 	}
 
-	response, err := this.readResponse(connection)
+	data, err := this.readRawMessage(connection)
 	if err != nil {
 		return errors.New(fmt.Sprintf("unable to read handshake: %s", err.Error()))
 	}
 
-	if ! response.GetHandshakeResponse().GetHandshakePassed() {
+	p := proto.NewBuffer(data)
+	ack := &org_apache_geode_internal_protocol_protobuf.HandshakeAcknowledgement{}
+
+	if err := p.DecodeMessage(ack); err != nil {
+		return err
+	}
+
+	if ! ack.GetHandshakePassed() {
 		return errors.New("handshake did not succeed")
 	}
 
@@ -267,35 +264,35 @@ func (this *Protobuf) Remove(region string, k interface{}) error {
 	return err
 }
 
-func (this *Protobuf) RemoveAll(region string, keys interface{}) error {
-	keySlice := reflect.ValueOf(keys)
-	if keySlice.Kind() != reflect.Slice && keySlice.Kind() != reflect.Array {
-		return errors.New("keys must be a slice or array")
-	}
-
-	encodedKeys := make([]*v1.EncodedValue, 0, keySlice.Len())
-	for i := 0; i < keySlice.Len(); i++ {
-		key, err := EncodeValue(keySlice.Index(i).Interface())
-		if err != nil {
-			return err
-		}
-
-		encodedKeys = append(encodedKeys, key)
-	}
-
-	removeAll := &v1.Request{
-		RequestAPI: &v1.Request_RemoveAllRequest{
-			RemoveAllRequest: &v1.RemoveAllRequest{
-				RegionName: region,
-				Key: encodedKeys,
-			},
-		},
-	}
-
-	_, err := this.doOperation(removeAll)
-
-	return err
-}
+//func (this *Protobuf) RemoveAll(region string, keys interface{}) error {
+//	keySlice := reflect.ValueOf(keys)
+//	if keySlice.Kind() != reflect.Slice && keySlice.Kind() != reflect.Array {
+//		return errors.New("keys must be a slice or array")
+//	}
+//
+//	encodedKeys := make([]*v1.EncodedValue, 0, keySlice.Len())
+//	for i := 0; i < keySlice.Len(); i++ {
+//		key, err := EncodeValue(keySlice.Index(i).Interface())
+//		if err != nil {
+//			return err
+//		}
+//
+//		encodedKeys = append(encodedKeys, key)
+//	}
+//
+//	removeAll := &v1.Request{
+//		RequestAPI: &v1.Request_RemoveAllRequest{
+//			RemoveAllRequest: &v1.RemoveAllRequest{
+//				RegionName: region,
+//				Key: encodedKeys,
+//			},
+//		},
+//	}
+//
+//	_, err := this.doOperation(removeAll)
+//
+//	return err
+//}
 
 func (this *Protobuf) doOperation(request *v1.Request) (*v1.Response, error) {
 	connection := this.pool.GetConnection()
@@ -324,6 +321,10 @@ func (this *Protobuf) writeRequest(connection net.Conn, r *v1.Request) (err erro
 		},
 	}
 
+	return this.writeMessage(connection, message)
+}
+
+func (this *Protobuf) writeMessage(connection net.Conn, message proto.Message) (err error) {
 	p := proto.NewBuffer(nil)
 	err = p.EncodeMessage(message)
 	if err != nil {
@@ -339,6 +340,22 @@ func (this *Protobuf) writeRequest(connection net.Conn, r *v1.Request) (err erro
 }
 
 func (this *Protobuf) readResponse(connection net.Conn) (*v1.Response, error) {
+	data, err := this.readRawMessage(connection)
+	if err != nil {
+		return nil, err
+	}
+
+	p := proto.NewBuffer(data)
+	response := &v1.Message{}
+
+	if err := p.DecodeMessage(response); err != nil {
+		return nil, err
+	}
+
+	return response.GetResponse(), nil
+}
+
+func (this *Protobuf) readRawMessage(connection net.Conn) ([]byte, error) {
 	data := make([]byte, 4096)
 	bytesRead, err := connection.Read(data)
 	if err != nil {
@@ -364,14 +381,7 @@ func (this *Protobuf) readResponse(connection net.Conn) (*v1.Response, error) {
 		bytesRead += n
 	}
 
-	p := proto.NewBuffer(data[0:bytesRead])
-	response := &v1.Message{}
-
-	if err := p.DecodeMessage(response); err != nil {
-		return nil, err
-	}
-
-	return response.GetResponse(), nil
+	return data[0:bytesRead], nil
 }
 
 func EncodeValue(val interface{}) (*v1.EncodedValue, error) {
