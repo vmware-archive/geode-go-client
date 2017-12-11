@@ -5,6 +5,11 @@ to communicate with locators and servers.
 
 ### Using it
 
+Get the package:
+
+    go get github.com/gemfire/geode-go-client
+
+Write some client code:
 
     package main
 
@@ -34,12 +39,17 @@ to communicate with locators and servers.
         client.Put("FOO", "A", 777)
 
         v, _ := client.Get("FOO", "A")
-        fmt.Printf("Value for A: %v\n", v)
+
+        // Type assert so that we can use the value
+        vx := v.(int32)
+        fmt.Printf("Value for A: %d\n", vx)
 
         client.Remove("FOO", "A")
 	}
 
-The API only supports manipulating data (get, getAll, put, putAll, remove and removeAll). It does not support managing regions or other Geode constructs.
+The API only supports manipulating data (get, getAll, put, putAll, size and remove). It does not support managing regions or other Geode constructs.
+
+Note that values returned will be of type `interface{}`. It is thus the responsibility of the caller to type assert as appropriate.
 
 To enable Geode's protobuf support, locators and servers must be started with the option `geode.feature-protobuf-protocol`.
     
@@ -53,6 +63,9 @@ The Geode protobuf support is currently in very active development which means t
 
 In order to update the protobuf bindings you will need to use the `protoc` tool. Assuming you have checked out this repository:
 
+    protoc --proto_path=$PATH_TO_GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto \
+      --go_out=protobuf \
+      handshake.proto
     protoc --proto_path=$PATH_TO_GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto \
       --go_out=protobuf \
       v1/{basicTypes,clientProtocol,connection_API,locator_API,region_API}.proto
