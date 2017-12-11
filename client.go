@@ -1,6 +1,6 @@
-package geode
+package geode_go_client
 
-import "geode/connector"
+import "github.com/gemfire/geode-go-client/connector"
 
 // A Client provides the high-level API required to interact with a Geode cluster. The API
 // supports the following key and value types:

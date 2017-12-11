@@ -3,10 +3,10 @@ package connector_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	v1 "geode/protobuf/v1"
-	"geode/connector"
+	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
+	"github.com/gemfire/geode-go-client/connector"
 	"github.com/golang/protobuf/proto"
-	"geode/connector/connectorfakes"
+	"github.com/gemfire/geode-go-client/connector/connectorfakes"
 )
 
 //go:generate counterfeiter net.Conn

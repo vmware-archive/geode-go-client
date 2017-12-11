@@ -2,7 +2,7 @@ package connector
 
 import (
 	"net"
-	v1 "geode/protobuf/v1"
+	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
 	"github.com/golang/protobuf/proto"
 	"errors"
 	"fmt"
