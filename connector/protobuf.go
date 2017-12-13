@@ -11,6 +11,9 @@ import (
 	"reflect"
 )
 
+//go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf handshake.proto
+//go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf v1/basicTypes.proto v1/clientProtocol.proto v1/connection_API.proto v1/locator_API.proto v1/region_API.proto
+
 // A Protobuf connector provides the low-level interface between a Client and the backend Geode servers.
 // It should not be used directly; rather the Client API should be used.
 type Protobuf struct {
