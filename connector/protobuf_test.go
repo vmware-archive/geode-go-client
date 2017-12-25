@@ -26,10 +26,10 @@ var _ = Describe("Client", func() {
 	Context("Connect", func() {
 		It("does not return an error", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				ack := &org_apache_geode_internal_protocol_protobuf.HandshakeAcknowledgement{
+				ack := &org_apache_geode_internal_protocol_protobuf.VersionAcknowledgement{
 					ServerMajorVersion: 1,
 					ServerMinorVersion: 1,
-					HandshakePassed:    true,
+					VersionAccepted:    true,
 				}
 				return writeFakeMessage(ack, b)
 			}
@@ -74,6 +74,20 @@ var _ = Describe("Client", func() {
 		It("does not accept an unknown type", func() {
 			Expect(connection.Put("foo", "A", struct{}{})).To(MatchError("unable to encode type: struct {}"))
 		})
+
+		It("can put a JSON structure", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_PutResponse{
+						PutResponse: &v1.PutResponse{},
+					},
+				}
+				return writeFakeResponse(response, b)
+			}
+
+			json := connector.JsonString("{'A':1}")
+			Expect(connection.Put("foo", "A", json)).To(BeNil())
+		})
 	})
 
 	Context("Get", func() {
@@ -104,10 +118,7 @@ var _ = Describe("Client", func() {
 				case 9:
 					v, _ = connector.EncodeValue("9")
 				case 10:
-					v, _ = connector.EncodeValue(&v1.CustomEncodedValue{
-						EncodingType: 10,
-						Value: []byte{1,2,3},
-					})
+					v, _ = connector.EncodeValue(connector.JsonString("{A:10}"))
 				}
 				callCount += 1
 
@@ -133,9 +144,7 @@ var _ = Describe("Client", func() {
 			Expect(connection.Get("foo", "A")).To(Equal("9"))
 
 			x, _ := connection.Get("foo", "A")
-			encoded := x.(*v1.CustomEncodedValue)
-			Expect(int(encoded.EncodingType)).To(Equal(10))
-			Expect(encoded.Value).To(Equal([]byte{1, 2, 3}))
+			Expect(x).To(Equal("{A:10}"))
 		})
 	})
 

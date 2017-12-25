@@ -11,7 +11,7 @@ import (
 	"reflect"
 )
 
-//go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf handshake.proto
+//go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf protocolVersion.proto
 //go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf v1/basicTypes.proto v1/clientProtocol.proto v1/connection_API.proto v1/locator_API.proto v1/region_API.proto
 
 // A Protobuf connector provides the low-level interface between a Client and the backend Geode servers.
@@ -19,6 +19,8 @@ import (
 type Protobuf struct {
 	pool *Pool
 }
+
+type JsonString string
 
 var MAJOR_VERSION uint32 = 1
 var MINOR_VERSION uint32 = 1
@@ -32,7 +34,7 @@ func NewConnector(pool *Pool) *Protobuf {
 func (this *Protobuf) Handshake() (err error) {
 	connection := this.pool.GetConnection()
 
-	request := &org_apache_geode_internal_protocol_protobuf.NewConnectionHandshake{
+	request := &org_apache_geode_internal_protocol_protobuf.NewConnectionClientVersion{
 		MajorVersion: MAJOR_VERSION,
 		MinorVersion: MINOR_VERSION,
 	}
@@ -48,13 +50,13 @@ func (this *Protobuf) Handshake() (err error) {
 	}
 
 	p := proto.NewBuffer(data)
-	ack := &org_apache_geode_internal_protocol_protobuf.HandshakeAcknowledgement{}
+	ack := &org_apache_geode_internal_protocol_protobuf.VersionAcknowledgement{}
 
 	if err := p.DecodeMessage(ack); err != nil {
 		return err
 	}
 
-	if ! ack.GetHandshakePassed() {
+	if ! ack.GetVersionAccepted() {
 		return errors.New("handshake did not succeed")
 	}
 
@@ -430,8 +432,8 @@ func EncodeValue(val interface{}) (*v1.EncodedValue, error) {
 		ev.Value = &v1.EncodedValue_BinaryResult{k}
 	case string:
 		ev.Value = &v1.EncodedValue_StringResult{k}
-	case *v1.CustomEncodedValue:
-		ev.Value = &v1.EncodedValue_CustomEncodedValue{(*v1.CustomEncodedValue)(k)}
+	case JsonString:
+		ev.Value = &v1.EncodedValue_JsonObjectResult{string(k)}
 	default:
 		return nil, errors.New(fmt.Sprintf("unable to encode type: %T", k))
 	}
@@ -462,8 +464,8 @@ func DecodeValue(value *v1.EncodedValue) (interface{}, error) {
 		decodedValue = v.BinaryResult
 	case *v1.EncodedValue_StringResult:
 		decodedValue = v.StringResult
-	case *v1.EncodedValue_CustomEncodedValue:
-		decodedValue = v.CustomEncodedValue
+	case *v1.EncodedValue_JsonObjectResult:
+		decodedValue = v.JsonObjectResult
 	case nil:
 		decodedValue = nil
 	default:

@@ -61,12 +61,10 @@ For example:
 
 The Geode protobuf support is currently in very active development which means that this code may not work if you are running against a local Geode build.
 
-In order to update the protobuf bindings you will need to use the `protoc` tool. Assuming you have checked out this repository:
+In order to update the protobuf bindings you will need the `protoc` tool installed locally. Assuming you have checked out the [Apache Geode](http://github.com/apache/geode) repository, set the environment variable `GEODE_CHECKOUT` to this location and re-generate the bindings:
 
-    protoc --proto_path=$PATH_TO_GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto \
-      --go_out=protobuf \
-      handshake.proto
-    protoc --proto_path=$PATH_TO_GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto \
-      --go_out=protobuf \
-      v1/{basicTypes,clientProtocol,connection_API,locator_API,region_API}.proto
+    $ export GEODE_CHECKOUT=/Users/jbloggs/workspace/geode
+    $ go generate connector/protobuf.go
+    
+The `protobuf.go` file contains `go:generate` directives to do the actual work.
 
