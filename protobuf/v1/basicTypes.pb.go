@@ -24,8 +24,8 @@ It has these top-level messages:
 	ErrorResponse
 	AuthenticationRequest
 	AuthenticationResponse
-	GetAvailableServersRequest
-	GetAvailableServersResponse
+	GetServerRequest
+	GetServerResponse
 	PutRequest
 	PutResponse
 	GetRequest
