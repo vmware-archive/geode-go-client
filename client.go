@@ -80,3 +80,7 @@ func (this *Client) Remove(region string, key interface{}) error {
 func (this *Client) Size(region string) (int64, error) {
 	return this.connector.Size(region)
 }
+
+func (this *Client) Execute(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error) {
+	return this.Execute(functionId, region, functionArgs, keyFilter)
+}

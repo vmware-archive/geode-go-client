@@ -361,6 +361,33 @@ var _ = Describe("Client", func() {
 			Expect(size).To(Equal(expected))
 		})
 	})
+
+	Context("Function", func() {
+		It("processes function arguments correctly", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				v_1, _ := connector.EncodeValue(777)
+				v_2, _ := connector.EncodeValue("Hello World")
+				response := &v1.Response{
+					ResponseAPI: &v1.Response_ExecuteFunctionOnRegionResponse{
+						ExecuteFunctionOnRegionResponse: &v1.ExecuteFunctionOnRegionResponse{
+ 							Results: []*v1.EncodedValue{
+ 								v_1,
+ 								v_2,
+							},
+						},
+					},
+				}
+				return writeFakeResponse(response, b)
+			}
+
+			result, err := connection.Execute("foo", "bar", nil, nil)
+
+			Expect(err).To(BeNil())
+			var expected int32 = 777
+			Expect(result[0]).To(Equal(expected))
+			Expect(result[1]).To(Equal("Hello World"))
+		})
+	})
 })
 
 func writeFakeResponse(r *v1.Response, b []byte) (int, error) {

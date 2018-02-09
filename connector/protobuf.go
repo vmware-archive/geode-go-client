@@ -12,7 +12,7 @@ import (
 )
 
 //go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf protocolVersion.proto
-//go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf v1/basicTypes.proto v1/clientProtocol.proto v1/connection_API.proto v1/locator_API.proto v1/region_API.proto
+//go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf v1/basicTypes.proto v1/clientProtocol.proto v1/connection_API.proto v1/locator_API.proto v1/region_API.proto v1/function_API.proto
 
 // A Protobuf connector provides the low-level interface between a Client and the backend Geode servers.
 // It should not be used directly; rather the Client API should be used.
@@ -22,8 +22,8 @@ type Protobuf struct {
 
 type JsonString string
 
-var MAJOR_VERSION uint32 = 1
-var MINOR_VERSION uint32 = 1
+const MAJOR_VERSION uint32 = 1
+const MINOR_VERSION uint32 = 1
 
 func NewConnector(pool *Pool) *Protobuf {
 	return &Protobuf{
@@ -316,6 +316,37 @@ func (this *Protobuf) Size(r string) (int64, error) {
 	region := response.GetGetRegionResponse().GetRegion()
 
 	return region.GetSize(), nil
+}
+
+func (this *Protobuf) Execute(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error){
+
+	request := &v1.Request{
+		RequestAPI: &v1.Request_ExecuteFunctionOnRegionRequest{
+			ExecuteFunctionOnRegionRequest: &v1.ExecuteFunctionOnRegionRequest{
+				FunctionID: functionId,
+				Region:     region,
+			},
+		},
+	}
+
+	response, err := this.doOperation(request)
+	if err != nil {
+		return nil, err
+	}
+
+	results := response.GetExecuteFunctionOnRegionResponse().GetResults()
+	decodedEntries := make([]interface{}, len(results))
+
+	for i, entry := range results {
+		value, err := DecodeValue(entry)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("unable to decode function result value: %s", err.Error()))
+		}
+
+		decodedEntries[i] = value
+	}
+
+	return decodedEntries, nil
 }
 
 func (this *Protobuf) doOperation(request *v1.Request) (*v1.Response, error) {

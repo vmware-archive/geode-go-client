@@ -12,6 +12,7 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
+// this will return failure code LOCATOR_ERROR if unable to find a suitable server
 type GetServerRequest struct {
 	ExcludedServers []*Server `protobuf:"bytes,1,rep,name=excludedServers" json:"excludedServers,omitempty"`
 	ServerGroup     string    `protobuf:"bytes,2,opt,name=serverGroup" json:"serverGroup,omitempty"`
