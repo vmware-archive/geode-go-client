@@ -20,8 +20,6 @@ It has these top-level messages:
 	Error
 	KeyedError
 	Message
-	Request
-	Response
 	ErrorResponse
 	AuthenticationRequest
 	AuthenticationResponse

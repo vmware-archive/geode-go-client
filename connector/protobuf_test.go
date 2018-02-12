@@ -42,12 +42,12 @@ var _ = Describe("Client", func() {
 	Context("Put", func() {
 		It("does not return an error", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_PutResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_PutResponse{
 						PutResponse: &v1.PutResponse{},
 					},
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			Expect(connection.Put("foo", "A", "B")).To(BeNil())
@@ -55,8 +55,8 @@ var _ = Describe("Client", func() {
 
 		It("handles errors correctly", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_ErrorResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_ErrorResponse{
 						ErrorResponse: &v1.ErrorResponse{
 							Error: &v1.Error{
 								ErrorCode: 1,
@@ -65,7 +65,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			Expect(connection.Put("foo", "A", "B")).To(MatchError("error from fake (1)"))
@@ -77,12 +77,12 @@ var _ = Describe("Client", func() {
 
 		It("can put a JSON structure", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_PutResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_PutResponse{
 						PutResponse: &v1.PutResponse{},
 					},
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			json := connector.JsonString("{'A':1}")
@@ -122,14 +122,14 @@ var _ = Describe("Client", func() {
 				}
 				callCount += 1
 
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_GetResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_GetResponse{
 						GetResponse: &v1.GetResponse{
 							Result: v,
 						},
 					},
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			Expect(connection.Get("foo", "A")).To(Equal(int32(1)))
@@ -151,15 +151,15 @@ var _ = Describe("Client", func() {
 	Context("PutAll", func() {
 		It("encodes values correctly", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_PutAllResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_PutAllResponse{
 						PutAllResponse: &v1.PutAllResponse{
 							FailedKeys: make([]*v1.KeyedError, 0),
 						},
 					},
 				}
 
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			entries := make(map[interface{}]interface{}, 0)
@@ -170,15 +170,15 @@ var _ = Describe("Client", func() {
 
 		It("reports protobuf encoding errors correctly", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_PutAllResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_PutAllResponse{
 						PutAllResponse: &v1.PutAllResponse{
 							FailedKeys: nil,
 						},
 					},
 				}
 
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			var entries = map[int]struct{}{0: {}}
@@ -199,15 +199,15 @@ var _ = Describe("Client", func() {
 						Message:   "test error",
 					},
 				})
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_PutAllResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_PutAllResponse{
 						PutAllResponse: &v1.PutAllResponse{
 							FailedKeys: failedKeys,
 						},
 					},
 				}
 
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			entries := make(map[interface{}]interface{})
@@ -227,15 +227,15 @@ var _ = Describe("Client", func() {
 				entries := make([]*v1.Entry, 0)
 				failures := make([]*v1.KeyedError, 0)
 
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_GetAllResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_GetAllResponse{
 						GetAllResponse: &v1.GetAllResponse{
 							Entries: entries,
 							Failures: failures,
 						},
 					},
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			keys := []interface{} {
@@ -268,15 +268,15 @@ var _ = Describe("Client", func() {
 					},
 				})
 
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_GetAllResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_GetAllResponse{
 						GetAllResponse: &v1.GetAllResponse{
 							Entries: entries,
 							Failures: failures,
 						},
 					},
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			keys := []interface{} {
@@ -295,12 +295,12 @@ var _ = Describe("Client", func() {
 	Context("Remove", func() {
 		It("does not return an error", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_RemoveResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_RemoveResponse{
 						RemoveResponse: &v1.RemoveResponse{},
 					},
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			Expect(connection.Remove("foo", "A")).To(BeNil())
@@ -318,12 +318,12 @@ var _ = Describe("Client", func() {
 	//Context("RemoveAll", func() {
 	//	It("does not return an error", func() {
 	//		fakeConn.ReadStub = func(b []byte) (int, error) {
-	//			response := &v1.Response{
-	//				ResponseAPI: &v1.Response_RemoveAllResponse{
+	//			response := &v1.Message{
+	//				MessageType: &v1.Message_RemoveAllResponse{
 	//					RemoveAllResponse: &v1.RemoveAllResponse{},
 	//				},
 	//			}
-	//			return writeFakeResponse(response, b)
+	//			return writeFakeMessage(response, b)
 	//		}
 	//
 	//		Expect(connection.Remove("foo", "A")).To(BeNil())
@@ -342,8 +342,8 @@ var _ = Describe("Client", func() {
 	Context("Size", func() {
 		It("returns the correct region size", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_GetRegionResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_GetRegionResponse{
 						GetRegionResponse: &v1.GetRegionResponse{
 							Region: &v1.Region{
 								Size: 77,
@@ -351,7 +351,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			size, err := connection.Size("foo")
@@ -367,8 +367,8 @@ var _ = Describe("Client", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				v_1, _ := connector.EncodeValue(777)
 				v_2, _ := connector.EncodeValue("Hello World")
-				response := &v1.Response{
-					ResponseAPI: &v1.Response_ExecuteFunctionOnRegionResponse{
+				response := &v1.Message{
+					MessageType: &v1.Message_ExecuteFunctionOnRegionResponse{
 						ExecuteFunctionOnRegionResponse: &v1.ExecuteFunctionOnRegionResponse{
  							Results: []*v1.EncodedValue{
  								v_1,
@@ -377,7 +377,7 @@ var _ = Describe("Client", func() {
 						},
 					},
 				}
-				return writeFakeResponse(response, b)
+				return writeFakeMessage(response, b)
 			}
 
 			result, err := connection.Execute("foo", "bar", nil, nil)
@@ -389,16 +389,6 @@ var _ = Describe("Client", func() {
 		})
 	})
 })
-
-func writeFakeResponse(r *v1.Response, b []byte) (int, error) {
-	response := &v1.Message{
-		MessageType: &v1.Message_Response{
-			Response: r,
-		},
-	}
-
-	return writeFakeMessage(response, b)
-}
 
 func writeFakeMessage(m proto.Message, b []byte) (int, error) {
 	p := proto.NewBuffer(nil)

@@ -74,8 +74,8 @@ func (this *Protobuf) Put(region string, k, v interface{}) (err error) {
 		return err
 	}
 
-	put := &v1.Request{
-		RequestAPI: &v1.Request_PutRequest{
+	put := &v1.Message{
+		MessageType: &v1.Message_PutRequest{
 			PutRequest: &v1.PutRequest{
 				RegionName: region,
 				Entry: &v1.Entry{
@@ -100,8 +100,8 @@ func (this *Protobuf) Get(region string, k interface{}) (interface{}, error) {
 		return nil, err
 	}
 
-	get := &v1.Request{
-		RequestAPI: &v1.Request_GetRequest{
+	get := &v1.Message{
+		MessageType: &v1.Message_GetRequest{
 			GetRequest: &v1.GetRequest{
 				RegionName: region,
 				Key:        key,
@@ -140,11 +140,11 @@ func (this *Protobuf) GetAll(region string, keys interface{}) (map[interface{}]i
 		encodedKeys = append(encodedKeys, key)
 	}
 
-	getAll := &v1.Request{
-		RequestAPI: &v1.Request_GetAllRequest{
+	getAll := &v1.Message{
+		MessageType: &v1.Message_GetAllRequest{
 			GetAllRequest: &v1.GetAllRequest{
-				RegionName: region,
-				Key: encodedKeys,
+				RegionName:  region,
+				Key:         encodedKeys,
 				CallbackArg: nil,
 			},
 		},
@@ -217,11 +217,11 @@ func (this *Protobuf) PutAll(region string, entries interface{}) (map[interface{
 		encodedEntries = append(encodedEntries, e)
 	}
 
-	putAll := &v1.Request{
-		RequestAPI: &v1.Request_PutAllRequest{
+	putAll := &v1.Message{
+		MessageType: &v1.Message_PutAllRequest{
 			PutAllRequest: &v1.PutAllRequest{
 				RegionName: region,
-				Entry: encodedEntries,
+				Entry:      encodedEntries,
 			},
 		},
 	}
@@ -255,8 +255,8 @@ func (this *Protobuf) Remove(region string, k interface{}) error {
 		return err
 	}
 
-	remove := &v1.Request{
-		RequestAPI: &v1.Request_RemoveRequest{
+	remove := &v1.Message{
+		MessageType: &v1.Message_RemoveRequest{
 			RemoveRequest: &v1.RemoveRequest{
 				RegionName: region,
 				Key:        key,
@@ -300,8 +300,8 @@ func (this *Protobuf) Remove(region string, k interface{}) error {
 //}
 
 func (this *Protobuf) Size(r string) (int64, error) {
-	request := &v1.Request{
-		RequestAPI: &v1.Request_GetRegionRequest{
+	request := &v1.Message{
+		MessageType: &v1.Message_GetRegionRequest{
 			GetRegionRequest: &v1.GetRegionRequest{
 				RegionName: r,
 			},
@@ -320,8 +320,8 @@ func (this *Protobuf) Size(r string) (int64, error) {
 
 func (this *Protobuf) Execute(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error){
 
-	request := &v1.Request{
-		RequestAPI: &v1.Request_ExecuteFunctionOnRegionRequest{
+	request := &v1.Message{
+		MessageType: &v1.Message_ExecuteFunctionOnRegionRequest{
 			ExecuteFunctionOnRegionRequest: &v1.ExecuteFunctionOnRegionRequest{
 				FunctionID: functionId,
 				Region:     region,
@@ -349,10 +349,10 @@ func (this *Protobuf) Execute(functionId, region string, functionArgs interface{
 	return decodedEntries, nil
 }
 
-func (this *Protobuf) doOperation(request *v1.Request) (*v1.Response, error) {
+func (this *Protobuf) doOperation(request *v1.Message) (*v1.Message, error) {
 	connection := this.pool.GetConnection()
 
-	err := this.writeRequest(connection, request)
+	err := this.writeMessage(connection, request)
 	if err != nil {
 		return nil, err
 	}
@@ -367,16 +367,6 @@ func (this *Protobuf) doOperation(request *v1.Request) (*v1.Response, error) {
 	}
 
 	return response, nil
-}
-
-func (this *Protobuf) writeRequest(connection net.Conn, r *v1.Request) (err error) {
-	message := &v1.Message{
-		MessageType: &v1.Message_Request{
-			Request: r,
-		},
-	}
-
-	return this.writeMessage(connection, message)
 }
 
 func (this *Protobuf) writeMessage(connection net.Conn, message proto.Message) (err error) {
@@ -394,7 +384,7 @@ func (this *Protobuf) writeMessage(connection net.Conn, message proto.Message) (
 	return nil
 }
 
-func (this *Protobuf) readResponse(connection net.Conn) (*v1.Response, error) {
+func (this *Protobuf) readResponse(connection net.Conn) (*v1.Message, error) {
 	data, err := this.readRawMessage(connection)
 	if err != nil {
 		return nil, err
@@ -407,7 +397,7 @@ func (this *Protobuf) readResponse(connection net.Conn) (*v1.Response, error) {
 		return nil, err
 	}
 
-	return response.GetResponse(), nil
+	return response, nil
 }
 
 func (this *Protobuf) readRawMessage(connection net.Conn) ([]byte, error) {
