@@ -1,7 +1,7 @@
 ### What is this?
 
-This is the beginning of a Go client for [Apache Geode](http://github.com/apache/geode). It uses Geode's new protobuf-based client protocol
-to communicate with locators and servers.
+This is the beginning of a Go client for [Apache Geode](http://github.com/apache/geode).
+It uses Geode's new protobuf-based client protocol to communicate with locators and servers.
 
 ### Using it
 
@@ -36,6 +36,7 @@ Write some client code:
         }
         fmt.Println("Connected....")
 
+        // Add a primitive type
         client.Put("FOO", "A", 777)
 
         v, _ := client.Get("FOO", "A")
@@ -46,12 +47,33 @@ Write some client code:
 
         client.Remove("FOO", "A")
 	}
+	
+Arbitrary structs are converted to JSON when they are `put` into a region:
 
-The API only supports manipulating data (get, getAll, put, putAll, size and remove). It does not support managing regions or other Geode constructs.
+    type MyStruct struct{
+        Name string
+        Age  int
+    }
+    
+    v := &MyStruct{"Joe", 42}
+    client.Put("Joe", v)    
 
-Note that values returned will be of type `interface{}`. It is thus the responsibility of the caller to type assert as appropriate.
+Similarly, to retrieve the data:
 
-To enable Geode's protobuf support, locators and servers must be started with the option `geode.feature-protobuf-protocol`.
+    v := &MyStruct{}
+    x := client.Get("Joe", v)
+
+v is optional for Get() and is only used if the data being retrieved is JSON. In the
+above example, x (returned from Get()) ends up pointing to v and is thus redundant.
+
+The API only supports manipulating data (get, getAll, put, putAll, size and remove).
+It does not support managing regions or other Geode constructs.
+
+Note that values returned will be of type `interface{}`. It is thus the responsibility
+of the caller to type assert as appropriate.
+
+To enable Geode's protobuf support, locators and servers must be started with the
+option `geode.feature-protobuf-protocol`.
     
 For example:
 
@@ -59,9 +81,13 @@ For example:
 
 ### Developing
 
-The Geode protobuf support is currently in very active development which means that this code may not work if you are running against a local Geode build.
+The Geode protobuf support is currently in very active development which means that
+this code may not work if you are running against a local Geode build.
 
-In order to update the protobuf bindings you will need the `protoc` tool installed locally. Assuming you have checked out the [Apache Geode](http://github.com/apache/geode) repository, set the environment variable `GEODE_CHECKOUT` to this location and re-generate the bindings:
+In order to update the protobuf bindings you will need the `protoc` tool installed
+locally. Assuming you have checked out the [Apache Geode](http://github.com/apache/geode)
+repository, set the environment variable `GEODE_CHECKOUT` to this location and
+re-generate the bindings:
 
     $ export GEODE_CHECKOUT=/Users/jbloggs/workspace/geode
     $ go generate connector/protobuf.go

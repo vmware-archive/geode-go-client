@@ -12,6 +12,11 @@ import (
 
 //go:generate counterfeiter net.Conn
 
+type TestStruct struct {
+	A int
+	B string
+}
+
 var _ = Describe("Client", func() {
 
 	var connection *connector.Protobuf
@@ -71,11 +76,7 @@ var _ = Describe("Client", func() {
 			Expect(connection.Put("foo", "A", "B")).To(MatchError("error from fake (1)"))
 		})
 
-		It("does not accept an unknown type", func() {
-			Expect(connection.Put("foo", "A", struct{}{})).To(MatchError("unable to encode type: struct {}"))
-		})
-
-		It("can put a JSON structure", func() {
+		It("can put an anonymous struct", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				response := &v1.Message{
 					MessageType: &v1.Message_PutResponse{
@@ -85,7 +86,7 @@ var _ = Describe("Client", func() {
 				return writeFakeMessage(response, b)
 			}
 
-			json := connector.JsonString("{'A':1}")
+			json := struct{ A int }{1}
 			Expect(connection.Put("foo", "A", json)).To(BeNil())
 		})
 	})
@@ -94,6 +95,10 @@ var _ = Describe("Client", func() {
 		It("decodes values correctly", func() {
 			var callCount = 0
 			var v *v1.EncodedValue
+			testStruct := &TestStruct{
+				A: 7,
+				B: "Hello World",
+			}
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				switch callCount {
 				case 0:
@@ -118,7 +123,7 @@ var _ = Describe("Client", func() {
 				case 9:
 					v, _ = connector.EncodeValue("9")
 				case 10:
-					v, _ = connector.EncodeValue(connector.JsonString("{A:10}"))
+					v, _ = connector.EncodeValue(testStruct)
 				}
 				callCount += 1
 
@@ -132,19 +137,22 @@ var _ = Describe("Client", func() {
 				return writeFakeMessage(response, b)
 			}
 
-			Expect(connection.Get("foo", "A")).To(Equal(int32(1)))
-			Expect(connection.Get("foo", "A")).To(Equal(int32(2)))
-			Expect(connection.Get("foo", "A")).To(Equal(int32(3)))
-			Expect(connection.Get("foo", "A")).To(Equal(int64(4)))
-			Expect(connection.Get("foo", "A")).To(Equal(byte(5)))
-			Expect(connection.Get("foo", "A")).To(Equal(true))
-			Expect(connection.Get("foo", "A")).To(Equal(float64(6)))
-			Expect(connection.Get("foo", "A")).To(Equal(float32(7)))
-			Expect(connection.Get("foo", "A")).To(Equal([]byte{8}))
-			Expect(connection.Get("foo", "A")).To(Equal("9"))
+			Expect(connection.Get("foo", "A", nil)).To(Equal(int32(1)))
+			Expect(connection.Get("foo", "A", nil)).To(Equal(int32(2)))
+			Expect(connection.Get("foo", "A", nil)).To(Equal(int32(3)))
+			Expect(connection.Get("foo", "A", nil)).To(Equal(int64(4)))
+			Expect(connection.Get("foo", "A", nil)).To(Equal(byte(5)))
+			Expect(connection.Get("foo", "A", nil)).To(Equal(true))
+			Expect(connection.Get("foo", "A", nil)).To(Equal(float64(6)))
+			Expect(connection.Get("foo", "A", nil)).To(Equal(float32(7)))
+			Expect(connection.Get("foo", "A", nil)).To(Equal([]byte{8}))
+			Expect(connection.Get("foo", "A", nil)).To(Equal("9"))
 
-			x, _ := connection.Get("foo", "A")
-			Expect(x).To(Equal("{A:10}"))
+			ref := &TestStruct{}
+			x, err := connection.Get("foo", "A", ref)
+			Expect(err).To(BeNil())
+			Expect(ref).To(Equal(testStruct))
+			Expect(x).To(Equal(testStruct))
 		})
 	})
 
@@ -163,29 +171,13 @@ var _ = Describe("Client", func() {
 			}
 
 			entries := make(map[interface{}]interface{}, 0)
+			entries["A"] = 777
+			entries[7] = "Jumbo"
+			entries[struct{}{}] = 0
+
 			response, err := connection.PutAll("foo", entries)
 			Expect(err).To(BeNil())
 			Expect(response).To(BeNil())
-		})
-
-		It("reports protobuf encoding errors correctly", func() {
-			fakeConn.ReadStub = func(b []byte) (int, error) {
-				response := &v1.Message{
-					MessageType: &v1.Message_PutAllResponse{
-						PutAllResponse: &v1.PutAllResponse{
-							FailedKeys: nil,
-						},
-					},
-				}
-
-				return writeFakeMessage(response, b)
-			}
-
-			var entries = map[int]struct{}{0: {}}
-
-			_, err := connection.PutAll("foo", entries)
-			Expect(err).ToNot(BeNil())
-			Expect(err.Error()).To(Equal("unable to encode type: struct {}"))
 		})
 
 		It("reports correctly failing entries", func() {
@@ -306,38 +298,20 @@ var _ = Describe("Client", func() {
 			Expect(connection.Remove("foo", "A")).To(BeNil())
 		})
 
-		It("returns error on invalid key type", func() {
+		It("does not return an error for struct{} key type", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				response := &v1.Message{
+					MessageType: &v1.Message_RemoveResponse{
+						RemoveResponse: &v1.RemoveResponse{},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
 			errResult := connection.Remove("foo", struct{}{})
 
-			Expect(errResult).ToNot(BeNil())
-			Expect(errResult.Error()).To(Equal("unable to encode type: struct {}"))
+			Expect(errResult).To(BeNil())
 		})
 	})
-
-	// This functionality is coming back...
-	//Context("RemoveAll", func() {
-	//	It("does not return an error", func() {
-	//		fakeConn.ReadStub = func(b []byte) (int, error) {
-	//			response := &v1.Message{
-	//				MessageType: &v1.Message_RemoveAllResponse{
-	//					RemoveAllResponse: &v1.RemoveAllResponse{},
-	//				},
-	//			}
-	//			return writeFakeMessage(response, b)
-	//		}
-	//
-	//		Expect(connection.Remove("foo", "A")).To(BeNil())
-	//	})
-	//
-	//	It("returns error on invalid key type", func() {
-	//		var x = []interface{} {struct{}{}}
-	//
-	//		errResult := connection.RemoveAll("foo", x)
-	//
-	//		Expect(errResult).ToNot(BeNil())
-	//		Expect(errResult.Error()).To(Equal("unable to encode type: struct {}"))
-	//	})
-	//})
 
 	Context("Size", func() {
 		It("returns the correct region size", func() {

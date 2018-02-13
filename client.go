@@ -43,9 +43,11 @@ func (this *Client) Put(region string, key, value interface{}) error {
 }
 
 // Get an entry from a region using the specified key. It is the callers' responsibility
-// to perform any type-assertion on the returned value.
-func (this *Client) Get(region string, key interface{}) (interface{}, error) {
-	return this.connector.Get(region, key)
+// to perform any type-assertion on the returned value. If a single, optional value is
+// passed, the data retrieved from the region will be attempted to be unmarshalled as JSON
+// into the supplied value.
+func (this *Client) Get(region string, key interface{}, value ...interface{}) (interface{}, error) {
+	return this.connector.Get(region, key, value)
 }
 
 // PutAll adds multiple key/value pairs to a single region. Entries must be in the form of

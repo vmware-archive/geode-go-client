@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"encoding/json"
 )
 
 //go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf protocolVersion.proto
@@ -19,8 +20,6 @@ import (
 type Protobuf struct {
 	pool *Pool
 }
-
-type JsonString string
 
 const MAJOR_VERSION uint32 = 1
 const MINOR_VERSION uint32 = 1
@@ -94,7 +93,7 @@ func (this *Protobuf) Put(region string, k, v interface{}) (err error) {
 	return nil
 }
 
-func (this *Protobuf) Get(region string, k interface{}) (interface{}, error) {
+func (this *Protobuf) Get(region string, k interface{}, value interface{}) (interface{}, error) {
 	key, err := EncodeValue(k)
 	if err != nil {
 		return nil, err
@@ -116,7 +115,7 @@ func (this *Protobuf) Get(region string, k interface{}) (interface{}, error) {
 
 	v := response.GetGetResponse().GetResult()
 
-	decoded, err := DecodeValue(v)
+	decoded, err := DecodeValue(v, value)
 	if err != nil {
 		return nil, err
 	}
@@ -159,12 +158,12 @@ func (this *Protobuf) GetAll(region string, keys interface{}) (map[interface{}]i
 	decodedFailures := make(map[interface{}]error)
 
 	for _, entry := range response.GetGetAllResponse().Entries {
-		key, err := DecodeValue(entry.Key)
+		key, err := DecodeValue(entry.Key, nil)
 		if err != nil {
 			return nil, nil, errors.New(fmt.Sprintf("unable to decode GetAll response key: %s", err.Error()))
 		}
 
-		value, err := DecodeValue(entry.Value)
+		value, err := DecodeValue(entry.Value, nil)
 		if err != nil {
 			decodedFailures[key] = errors.New(fmt.Sprintf("unable to decode GetAll value for key: %v: %s", key, err.Error()))
 			continue
@@ -174,7 +173,7 @@ func (this *Protobuf) GetAll(region string, keys interface{}) (map[interface{}]i
 	}
 
 	for _, failure := range response.GetGetAllResponse().Failures {
-		key, err := DecodeValue(failure.Key)
+		key, err := DecodeValue(failure.Key, nil)
 		if err != nil {
 			return nil, nil, errors.New(fmt.Sprintf("unable to decode GetAll failure response for key: %v: %s", failure.Key, err.Error()))
 		}
@@ -234,7 +233,7 @@ func (this *Protobuf) PutAll(region string, entries interface{}) (map[interface{
 	response := r.GetPutAllResponse()
 	failures := make(map[interface{}]error)
 	for _, k := range response.GetFailedKeys() {
-		key, err := DecodeValue(k.Key)
+		key, err := DecodeValue(k.Key, nil)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("unable to decode failed PutAll response key: %s", err.Error()))
 		}
@@ -268,36 +267,6 @@ func (this *Protobuf) Remove(region string, k interface{}) error {
 
 	return err
 }
-
-//func (this *Protobuf) RemoveAll(region string, keys interface{}) error {
-//	keySlice := reflect.ValueOf(keys)
-//	if keySlice.Kind() != reflect.Slice && keySlice.Kind() != reflect.Array {
-//		return errors.New("keys must be a slice or array")
-//	}
-//
-//	encodedKeys := make([]*v1.EncodedValue, 0, keySlice.Len())
-//	for i := 0; i < keySlice.Len(); i++ {
-//		key, err := EncodeValue(keySlice.Index(i).Interface())
-//		if err != nil {
-//			return err
-//		}
-//
-//		encodedKeys = append(encodedKeys, key)
-//	}
-//
-//	removeAll := &v1.Request{
-//		RequestAPI: &v1.Request_RemoveAllRequest{
-//			RemoveAllRequest: &v1.RemoveAllRequest{
-//				RegionName: region,
-//				Key: encodedKeys,
-//			},
-//		},
-//	}
-//
-//	_, err := this.doOperation(removeAll)
-//
-//	return err
-//}
 
 func (this *Protobuf) Size(r string) (int64, error) {
 	request := &v1.Message{
@@ -338,7 +307,7 @@ func (this *Protobuf) Execute(functionId, region string, functionArgs interface{
 	decodedEntries := make([]interface{}, len(results))
 
 	for i, entry := range results {
-		value, err := DecodeValue(entry)
+		value, err := DecodeValue(entry, nil)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("unable to decode function result value: %s", err.Error()))
 		}
@@ -453,16 +422,19 @@ func EncodeValue(val interface{}) (*v1.EncodedValue, error) {
 		ev.Value = &v1.EncodedValue_BinaryResult{k}
 	case string:
 		ev.Value = &v1.EncodedValue_StringResult{k}
-	case JsonString:
-		ev.Value = &v1.EncodedValue_JsonObjectResult{string(k)}
 	default:
-		return nil, errors.New(fmt.Sprintf("unable to encode type: %T", k))
+		// Assume we have some struct and want to turn it into JSON
+		j, err := json.Marshal(k)
+		if err != nil {
+			return nil, err
+		}
+		ev.Value = &v1.EncodedValue_JsonObjectResult{string(j)}
 	}
 
 	return ev, nil
 }
 
-func DecodeValue(value *v1.EncodedValue) (interface{}, error) {
+func DecodeValue(value *v1.EncodedValue, ref interface{}) (interface{}, error) {
 	var decodedValue interface{}
 
 	switch v := value.GetValue().(type) {
@@ -486,7 +458,11 @@ func DecodeValue(value *v1.EncodedValue) (interface{}, error) {
 	case *v1.EncodedValue_StringResult:
 		decodedValue = v.StringResult
 	case *v1.EncodedValue_JsonObjectResult:
-		decodedValue = v.JsonObjectResult
+		err := json.Unmarshal([]byte(v.JsonObjectResult), ref)
+		if err != nil {
+			return nil, err
+		}
+		decodedValue = ref
 	case nil:
 		decodedValue = nil
 	default:
