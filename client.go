@@ -83,6 +83,19 @@ func (this *Client) Size(region string) (int64, error) {
 	return this.connector.Size(region)
 }
 
-func (this *Client) Execute(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error) {
-	return this.connector.Execute(functionId, region, functionArgs, keyFilter)
+// Execute a function on a region. This will execute on all members hosting the region and return a slice
+// of results; one entry for each member.
+func (this *Client) ExecuteOnRegion(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error) {
+	return this.connector.ExecuteOnRegion(functionId, region, functionArgs, keyFilter)
+}
+
+// Execute a function on a list of members, returning a slice of results, one entry for each member.
+func (this *Client) ExecuteOnMembers(functionId string, members []string, functionArgs interface{}) ([]interface{}, error) {
+	return this.connector.ExecuteOnMembers(functionId, members, functionArgs)
+}
+
+// Execute a function on a list of group. This will execute on each member associated with the groups;
+// returning a slice of results, one entry for each member.
+func (this *Client) ExecuteOnGroups(functionId string, groups []string, functionArgs interface{}) ([]interface{}, error) {
+	return this.connector.ExecuteOnGroups(functionId, groups, functionArgs)
 }

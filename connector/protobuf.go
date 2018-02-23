@@ -287,13 +287,18 @@ func (this *Protobuf) Size(r string) (int64, error) {
 	return region.GetSize(), nil
 }
 
-func (this *Protobuf) Execute(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error){
+func (this *Protobuf) ExecuteOnRegion(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error){
+	args, err := EncodeValue(functionArgs)
+	if err != nil {
+		return nil, err
+	}
 
 	request := &v1.Message{
 		MessageType: &v1.Message_ExecuteFunctionOnRegionRequest{
 			ExecuteFunctionOnRegionRequest: &v1.ExecuteFunctionOnRegionRequest{
 				FunctionID: functionId,
 				Region:     region,
+				Arguments:  args,
 			},
 		},
 	}
@@ -304,6 +309,60 @@ func (this *Protobuf) Execute(functionId, region string, functionArgs interface{
 	}
 
 	results := response.GetExecuteFunctionOnRegionResponse().GetResults()
+	return decodedFunctionResults(results)
+}
+
+func (this *Protobuf) ExecuteOnMembers(functionId string, members []string, functionArgs interface{}) ([]interface{}, error){
+	args, err := EncodeValue(functionArgs)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &v1.Message{
+		MessageType: &v1.Message_ExecuteFunctionOnMemberRequest{
+			ExecuteFunctionOnMemberRequest: &v1.ExecuteFunctionOnMemberRequest{
+				FunctionID: functionId,
+				MemberName: members,
+				Arguments:  args,
+			},
+		},
+	}
+
+	response, err := this.doOperation(request)
+	if err != nil {
+		return nil, err
+	}
+
+	results := response.GetExecuteFunctionOnMemberResponse().GetResults()
+	return decodedFunctionResults(results)
+}
+
+func (this *Protobuf) ExecuteOnGroups(functionId string, groups []string, functionArgs interface{}) ([]interface{}, error){
+	args, err := EncodeValue(functionArgs)
+	if err != nil {
+		return nil, err
+	}
+
+	request := &v1.Message{
+		MessageType: &v1.Message_ExecuteFunctionOnGroupRequest{
+			ExecuteFunctionOnGroupRequest: &v1.ExecuteFunctionOnGroupRequest{
+				FunctionID: functionId,
+				GroupName:  groups,
+				Arguments:  args,
+			},
+		},
+	}
+
+	response, err := this.doOperation(request)
+	if err != nil {
+		return nil, err
+	}
+
+	results := response.GetExecuteFunctionOnGroupResponse().GetResults()
+	return decodedFunctionResults(results)
+}
+
+func decodedFunctionResults(results []*v1.EncodedValue) ([]interface{}, error) {
 	decodedEntries := make([]interface{}, len(results))
 
 	for i, entry := range results {

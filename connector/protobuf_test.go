@@ -337,7 +337,7 @@ var _ = Describe("Client", func() {
 	})
 
 	Context("Function", func() {
-		It("processes function arguments correctly", func() {
+		It("processes onRegion function arguments correctly", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				v_1, _ := connector.EncodeValue(777)
 				v_2, _ := connector.EncodeValue("Hello World")
@@ -354,7 +354,57 @@ var _ = Describe("Client", func() {
 				return writeFakeMessage(response, b)
 			}
 
-			result, err := connection.Execute("foo", "bar", nil, nil)
+			result, err := connection.ExecuteOnRegion("foo", "bar", nil, nil)
+
+			Expect(err).To(BeNil())
+			var expected int32 = 777
+			Expect(result[0]).To(Equal(expected))
+			Expect(result[1]).To(Equal("Hello World"))
+		})
+
+		It("processes onMember function arguments correctly", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				v_1, _ := connector.EncodeValue(777)
+				v_2, _ := connector.EncodeValue("Hello World")
+				response := &v1.Message{
+					MessageType: &v1.Message_ExecuteFunctionOnMemberResponse{
+						ExecuteFunctionOnMemberResponse: &v1.ExecuteFunctionOnMemberResponse{
+ 							Results: []*v1.EncodedValue{
+ 								v_1,
+ 								v_2,
+							},
+						},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			result, err := connection.ExecuteOnMembers("foo", []string{"bar"}, nil)
+
+			Expect(err).To(BeNil())
+			var expected int32 = 777
+			Expect(result[0]).To(Equal(expected))
+			Expect(result[1]).To(Equal("Hello World"))
+		})
+
+		It("processes onGroup function arguments correctly", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				v_1, _ := connector.EncodeValue(777)
+				v_2, _ := connector.EncodeValue("Hello World")
+				response := &v1.Message{
+					MessageType: &v1.Message_ExecuteFunctionOnGroupResponse{
+						ExecuteFunctionOnGroupResponse: &v1.ExecuteFunctionOnGroupResponse{
+ 							Results: []*v1.EncodedValue{
+ 								v_1,
+ 								v_2,
+							},
+						},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			result, err := connection.ExecuteOnGroups("foo", []string{"bar"}, nil)
 
 			Expect(err).To(BeNil())
 			var expected int32 = 777
