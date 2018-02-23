@@ -84,5 +84,5 @@ func (this *Client) Size(region string) (int64, error) {
 }
 
 func (this *Client) Execute(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error) {
-	return this.Execute(functionId, region, functionArgs, keyFilter)
+	return this.connector.Execute(functionId, region, functionArgs, keyFilter)
 }
