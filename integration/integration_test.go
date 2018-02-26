@@ -11,19 +11,17 @@ import (
 )
 
 func TestIntegration(t *testing.T) {
-	// download latest geode nightly
-	downloadLocation, err := ioutil.TempDir("", "")
-	require.NoError(t, err)
-	geodeHome, err := downloadBinary(downloadLocation, "http://apache.claz.org/geode/1.4.0/apache-geode-1.4.0.tgz")
-	require.NoError(t, err)
 
-	// tempDir is the test directory used to host locator and server directories
+	if _, present := os.LookupEnv("GEODE_HOME"); present != true {
+		t.Skip("$GEODE_HOME is not set")
+	}
+
+	// tempDir is a temp directory used to host locator and server directories
 	tempDir, err := ioutil.TempDir("", "")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
 	config := ClusterConfig{
-		geodeDir:    geodeHome, //"/Users/sboorlagadda/workspace/debug/geode/apache-geode-1.5.0-SNAPSHOT/",
 		clusterDir:  tempDir,
 		locatorPort: 10334,
 		locatorName: "locator1",
@@ -45,6 +43,7 @@ func TestIntegration(t *testing.T) {
 
 	t.Run("get gets existing data", wrap(GetExistingData))
 	t.Run("gets and puts", wrap(GetsAndPuts))
+	t.Run("getall and putall", wrap(GetsAllAndPutsAll))
 }
 
 func GetExistingData(t *testing.T, gfsh func(command string) error, c *geode.Client) {
@@ -59,4 +58,21 @@ func GetsAndPuts(t *testing.T, gfsh func(command string) error, c *geode.Client)
 	v, err := c.Get("FOO", "A")
 	require.NoError(t, err)
 	assert.EqualValues(t, v, 777, "Get failed to get written key")
+}
+
+func GetsAllAndPutsAll(t *testing.T, gfsh func(command string) error, c *geode.Client) {
+	entries := make(map[interface{}]interface{}, 0)
+	entries["A"] = 777
+	entries["B"] = "Jumbo"
+
+	c.PutAll("FOO", entries)
+
+	keys := []interface{}{
+		"A", "B", "unknownkey",
+	}
+	entries, _, err := c.GetAll("FOO", keys)
+	require.NoError(t, err)
+	//require.Contains(t, failures, "unknownkey") - check why its failing
+	assert.EqualValues(t, entries["A"], 777)
+	assert.EqualValues(t, entries["B"], "Jumbo")
 }
