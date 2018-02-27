@@ -1,78 +1,113 @@
-package main
+package integration
 
 import (
 	"io/ioutil"
 	"os"
-	"testing"
 
-	geode "github.com/gemfire/geode-go-client"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
-func TestIntegration(t *testing.T) {
+var _ = Describe("Client", func() {
 
-	if _, present := os.LookupEnv("GEODE_HOME"); present != true {
-		t.Skip("$GEODE_HOME is not set")
-	}
+	var (
+		tempDir    string
+		tempDirErr error
+		cluster    *GeodeCluster
+	)
 
-	// tempDir is a temp directory used to host locator and server directories
-	tempDir, err := ioutil.TempDir("", "")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	BeforeSuite(func() {
+		tempDir, tempDirErr = ioutil.TempDir("", "")
+		Expect(tempDirErr).To(BeNil())
 
-	config := ClusterConfig{
-		clusterDir:  tempDir,
-		locatorPort: 10334,
-		locatorName: "locator1",
-		serverName:  "server1",
-		serverPort:  40404,
-	}
-
-	cluster := NewGeodeCluster(config)
-	require.NoError(t, cluster.Start())
-	defer cluster.Close()
-
-	wrap := func(fn func(*testing.T, func(command string) error, *geode.Client)) func(*testing.T) {
-		return func(t *testing.T) {
-			cluster.gfsh("create region --name=FOO --type=REPLICATE")
-			fn(t, cluster.gfsh, cluster.client)
-			cluster.gfsh("destroy region --name=FOO")
+		config := ClusterConfig{
+			clusterDir:  tempDir,
+			locatorPort: 10334,
+			locatorName: "locator1",
+			serverName:  "server1",
+			serverPort:  40404,
 		}
-	}
 
-	t.Run("get gets existing data", wrap(GetExistingData))
-	t.Run("gets and puts", wrap(GetsAndPuts))
-	t.Run("getall and putall", wrap(GetsAllAndPutsAll))
-}
+		cluster = NewGeodeCluster(config)
+		err := cluster.Start()
+		Expect(err).To(BeNil())
+	})
 
-func GetExistingData(t *testing.T, gfsh func(command string) error, c *geode.Client) {
-	gfsh("put --key=\"A\" --value=1 --region=FOO")
-	v, err := c.Get("FOO", "A")
-	require.NoError(t, err)
-	assert.Equal(t, v, "1", "Get failed to get existing key")
-}
+	BeforeEach(func() {
+		err := cluster.gfsh("create region --name=FOO --type=REPLICATE")
+		Expect(err).To(BeNil())
 
-func GetsAndPuts(t *testing.T, gfsh func(command string) error, c *geode.Client) {
-	c.Put("FOO", "A", 777)
-	v, err := c.Get("FOO", "A")
-	require.NoError(t, err)
-	assert.EqualValues(t, v, 777, "Get failed to get written key")
-}
+	})
 
-func GetsAllAndPutsAll(t *testing.T, gfsh func(command string) error, c *geode.Client) {
-	entries := make(map[interface{}]interface{}, 0)
-	entries["A"] = 777
-	entries["B"] = "Jumbo"
+	AfterEach(func() {
+		cluster.gfsh("destroy region --name=FOO")
 
-	c.PutAll("FOO", entries)
+	})
 
-	keys := []interface{}{
-		"A", "B", "unknownkey",
-	}
-	entries, _, err := c.GetAll("FOO", keys)
-	require.NoError(t, err)
-	//require.Contains(t, failures, "unknownkey") - check why its failing
-	assert.EqualValues(t, entries["A"], 777)
-	assert.EqualValues(t, entries["B"], "Jumbo")
-}
+	AfterSuite(func() {
+		cluster.Close()
+		os.RemoveAll(tempDir)
+	})
+
+	Describe("Get", func() {
+		It("should get existing data", func() {
+			// use gfsh to put a key/value
+			cluster.gfsh("put --key=\"A\" --value=1 --region=FOO")
+			v, err := cluster.client.Get("FOO", "A")
+			Expect(err).To(BeNil())
+			Expect(v).ToNot(BeNil())
+			Expect(v).To(Equal("1"))
+		})
+	})
+
+	Describe("GetAll", func() {
+		It("should get existing data", func() {
+			// use gfsh to put some key/values
+			cluster.gfsh("put --key=\"A\" --value=\"Apple\" --region=FOO")
+			cluster.gfsh("put --key=\"B\" --value=\"Ball\" --region=FOO")
+
+			keys := []interface{}{
+				"A", "B", "unknownkey",
+			}
+
+			entries, _, err := cluster.client.GetAll("FOO", keys)
+			Expect(err).To(BeNil())
+			//Ω(failures).Should(HaveLen(1)) - Looks like failures does not contain "unknownkey"
+			//Ω(entries).Should(HaveLen(2))
+			Ω(entries).Should(ContainElement(BeEquivalentTo("Apple")))
+			Ω(entries).Should(ContainElement(BeEquivalentTo("Ball")))
+		})
+	})
+
+	Describe("Put", func() {
+		It("should write data to region", func() {
+			cluster.client.Put("FOO", "A", 777)
+			v, err := cluster.client.Get("FOO", "A")
+			Expect(err).To(BeNil())
+			Expect(v).ToNot(BeNil())
+			Expect(v).To(BeEquivalentTo(777))
+		})
+	})
+
+	Describe("PutAll", func() {
+		It("should write data to region", func() {
+			entries := make(map[interface{}]interface{}, 0)
+			entries["A"] = 777
+			entries["B"] = "Jumbo"
+
+			_, err := cluster.client.PutAll("FOO", entries)
+			Expect(err).To(BeNil())
+
+			keys := []interface{}{
+				"A", "B", "unknownkey",
+			}
+
+			entries, _, err = cluster.client.GetAll("FOO", keys)
+			Expect(err).To(BeNil())
+			//Ω(failures).Should(HaveLen(1)) - Looks like failures does not contain "unknownkey"
+			//Ω(entries).Should(HaveLen(2))
+			Ω(entries).Should(ContainElement(BeEquivalentTo(777)))
+			Ω(entries).Should(ContainElement(BeEquivalentTo("Jumbo")))
+		})
+	})
+})
