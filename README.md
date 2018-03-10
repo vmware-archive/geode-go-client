@@ -28,6 +28,9 @@ Write some client code:
         }
 
         p := connector.NewPool(c)
+        // Optionally add user credentials
+        p.AddCredentials("jbloggs", "t0p53cr3t")
+        
         conn := connector.NewConnector(p)
         client := geode.NewGeodeClient(conn)
         err = client.Connect()

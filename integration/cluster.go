@@ -24,7 +24,10 @@ type ClusterConfig struct {
 	locatorName string
 	serverName  string
 
-	clusterDir string
+	clusterDir  string
+
+	username    *string
+	password    *string
 }
 
 type GeodeCluster struct {
@@ -46,7 +49,15 @@ func NewGeodeCluster(config ClusterConfig) *GeodeCluster {
 }
 
 func (g *GeodeCluster) gfsh(command string) error {
-	args := append([]string{"-e", "connect --locator=" + g.locatorAddr, "-e", command})
+	var connectCmd string
+	if g.username == nil {
+		connectCmd = "connect --locator=" + g.locatorAddr
+	} else {
+		connectCmd = fmt.Sprintf("connect --locator=%s --user=%s --password=%s", g.locatorAddr,*g.username, *g.password)
+	}
+
+	args := append([]string{"-e", connectCmd, "-e", command})
+
 	gfsh := exec.Command(os.ExpandEnv("$GEODE_HOME/bin/gfsh"), args...)
 
 	gfsh.Dir = g.clusterDir
@@ -57,12 +68,17 @@ func (g *GeodeCluster) gfsh(command string) error {
 }
 
 func (g *GeodeCluster) StartLocator() error {
-	locator := exec.Command(os.ExpandEnv("$GEODE_HOME/bin/gfsh"),
+	args := []string{
 		"start",
 		"locator",
 		"--name="+g.locatorName,
 		"--J=-Dgeode.feature-protobuf-protocol=true",
-	)
+	}
+	if g.username != nil {
+		args = append(args,"--J=-Dgemfire.security-manager=org.apache.geode.examples.SimpleSecurityManager")
+	}
+
+	locator := exec.Command(os.ExpandEnv("$GEODE_HOME/bin/gfsh"), args...)
 	locator.Dir = g.clusterDir
 	locator.Stdout = os.Stdout
 	locator.Stderr = os.Stderr
@@ -77,13 +93,21 @@ func (g *GeodeCluster) StartLocator() error {
 }
 
 func (g *GeodeCluster) StartServer() error {
-	server := exec.Command(os.ExpandEnv("$GEODE_HOME/bin/gfsh"),
+	args := []string{
 		"start",
 		"server",
 		"--name="+g.serverName,
 		"--locators="+g.locatorAddr,
 		"--J=-Dgeode.feature-protobuf-protocol=true",
-	)
+	}
+
+	if g.username != nil {
+		args = append(args, "--J=-Dgemfire.security-manager=org.apache.geode.examples.SimpleSecurityManager",
+			fmt.Sprintf("--user=%s", *g.username),
+			fmt.Sprintf("--password=%s", *g.password))
+	}
+
+	server := exec.Command(os.ExpandEnv("$GEODE_HOME/bin/gfsh"), args...)
 	server.Dir = g.clusterDir
 	server.Stdout = os.Stdout
 	server.Stderr = os.Stderr
@@ -111,6 +135,11 @@ func (g *GeodeCluster) Start() error {
 		panic(err)
 	}
 	pool := connector.NewPool(c)
+
+	if g.username != nil {
+		pool.AddCredentials(*g.username, *g.password)
+	}
+
 	conn := connector.NewConnector(pool)
 	g.client = geode.NewGeodeClient(conn)
 	err = g.client.Connect()
@@ -119,6 +148,13 @@ func (g *GeodeCluster) Start() error {
 	}
 
 	return nil
+}
+
+func (g *GeodeCluster) WithSecurity(username, password string) (*GeodeCluster) {
+	g.username = &username
+	g.password = &password
+
+	return g
 }
 
 func (g *GeodeCluster) Close() {

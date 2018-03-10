@@ -21,10 +21,11 @@ var _ = Describe("Client", func() {
 
 	var connection *connector.Protobuf
 	var fakeConn *connectorfakes.FakeConn
+	var pool *connector.Pool
 
 	BeforeEach(func() {
 		fakeConn = new(connectorfakes.FakeConn)
-		pool := connector.NewPool(fakeConn)
+		pool = connector.NewPool(fakeConn)
 		connection = connector.NewConnector(pool)
 	})
 
@@ -41,6 +42,59 @@ var _ = Describe("Client", func() {
 
 			Expect(connection.Handshake()).To(BeNil())
 			Expect(fakeConn.WriteCallCount()).To(Equal(1))
+		})
+
+		It("authenticates correctly", func() {
+			pool.AddCredentials("cluster", "cluster")
+
+			var ack proto.Message
+			var callCount = 0
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				switch callCount {
+				case 0:
+					ack = &v1.Message{
+						MessageType: &v1.Message_AuthenticationResponse{
+							AuthenticationResponse: &v1.AuthenticationResponse{
+								Authenticated: true,
+							},
+						},
+					}
+				case 1:
+					ack = &v1.Message{
+						MessageType: &v1.Message_PutResponse{
+							PutResponse: &v1.PutResponse{},
+						},
+					}
+				}
+				callCount += 1
+
+				return writeFakeMessage(ack, b)
+			}
+
+			err := connection.Put("foo", "a", 1)
+			Expect(err).To(BeNil())
+			Expect(fakeConn.WriteCallCount()).To(Equal(2))
+		})
+
+		It("returns an error on authentication failure", func() {
+			pool.AddCredentials("cluster", "bad")
+
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				ack := &v1.Message{
+					MessageType: &v1.Message_AuthenticationResponse{
+						AuthenticationResponse: &v1.AuthenticationResponse{
+							Authenticated: false,
+						},
+					},
+				}
+
+				return writeFakeMessage(ack, b)
+			}
+
+			_, err := connection.Get("foo", "a", nil)
+			Expect(err).ToNot(BeNil())
+			Expect(err).To(BeAssignableToTypeOf(connector.AuthenticationError("")))
+
 		})
 	})
 
@@ -317,11 +371,9 @@ var _ = Describe("Client", func() {
 		It("returns the correct region size", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				response := &v1.Message{
-					MessageType: &v1.Message_GetRegionResponse{
-						GetRegionResponse: &v1.GetRegionResponse{
-							Region: &v1.Region{
-								Size: 77,
-							},
+					MessageType: &v1.Message_GetSizeResponse{
+						GetSizeResponse: &v1.GetSizeResponse{
+							Size: 77,
 						},
 					},
 				}
@@ -331,7 +383,7 @@ var _ = Describe("Client", func() {
 			size, err := connection.Size("foo")
 
 			Expect(err).To(BeNil())
-			var expected int64 = 77
+			var expected int32 = 77
 			Expect(size).To(Equal(expected))
 		})
 	})

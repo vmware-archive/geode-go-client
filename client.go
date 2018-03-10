@@ -79,7 +79,7 @@ func (this *Client) Remove(region string, key interface{}) error {
 //}
 
 // Size returns the number of entries in a region
-func (this *Client) Size(region string) (int64, error) {
+func (this *Client) Size(region string) (int32, error) {
 	return this.connector.Size(region)
 }
 

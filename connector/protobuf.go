@@ -31,19 +31,22 @@ func NewConnector(pool *Pool) *Protobuf {
 }
 
 func (this *Protobuf) Handshake() (err error) {
-	connection := this.pool.GetConnection()
+	connection, err := this.pool.GetUnauthenticatedConnection()
+	if err != nil {
+		return err
+	}
 
 	request := &org_apache_geode_internal_protocol_protobuf.NewConnectionClientVersion{
 		MajorVersion: MAJOR_VERSION,
 		MinorVersion: MINOR_VERSION,
 	}
 
-	err = this.writeMessage(connection, request)
+	err = writeMessage(connection, request)
 	if err != nil {
 		return errors.New(fmt.Sprintf("unable to write handshake: %s", err.Error()))
 	}
 
-	data, err := this.readRawMessage(connection)
+	data, err := readRawMessage(connection)
 	if err != nil {
 		return errors.New(fmt.Sprintf("unable to read handshake: %s", err.Error()))
 	}
@@ -268,10 +271,10 @@ func (this *Protobuf) Remove(region string, k interface{}) error {
 	return err
 }
 
-func (this *Protobuf) Size(r string) (int64, error) {
+func (this *Protobuf) Size(r string) (int32, error) {
 	request := &v1.Message{
-		MessageType: &v1.Message_GetRegionRequest{
-			GetRegionRequest: &v1.GetRegionRequest{
+		MessageType: &v1.Message_GetSizeRequest{
+			GetSizeRequest: &v1.GetSizeRequest{
 				RegionName: r,
 			},
 		},
@@ -282,9 +285,9 @@ func (this *Protobuf) Size(r string) (int64, error) {
 		return 0, err
 	}
 
-	region := response.GetGetRegionResponse().GetRegion()
+	size := response.GetGetSizeResponse().GetSize()
 
-	return region.GetSize(), nil
+	return size, nil
 }
 
 func (this *Protobuf) ExecuteOnRegion(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error){
@@ -378,14 +381,21 @@ func decodedFunctionResults(results []*v1.EncodedValue) ([]interface{}, error) {
 }
 
 func (this *Protobuf) doOperation(request *v1.Message) (*v1.Message, error) {
-	connection := this.pool.GetConnection()
-
-	err := this.writeMessage(connection, request)
+	connection, err := this.pool.GetConnection()
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := this.readResponse(connection)
+	return doOperationWithConnection(connection, request)
+}
+
+func doOperationWithConnection(connection net.Conn, request *v1.Message) (*v1.Message, error) {
+	err := writeMessage(connection, request)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := readResponse(connection)
 	if err != nil {
 		return nil, err
 	}
@@ -397,7 +407,7 @@ func (this *Protobuf) doOperation(request *v1.Message) (*v1.Message, error) {
 	return response, nil
 }
 
-func (this *Protobuf) writeMessage(connection net.Conn, message proto.Message) (err error) {
+func writeMessage(connection net.Conn, message proto.Message) (err error) {
 	p := proto.NewBuffer(nil)
 	err = p.EncodeMessage(message)
 	if err != nil {
@@ -412,8 +422,8 @@ func (this *Protobuf) writeMessage(connection net.Conn, message proto.Message) (
 	return nil
 }
 
-func (this *Protobuf) readResponse(connection net.Conn) (*v1.Message, error) {
-	data, err := this.readRawMessage(connection)
+func readResponse(connection net.Conn) (*v1.Message, error) {
+	data, err := readRawMessage(connection)
 	if err != nil {
 		return nil, err
 	}
@@ -428,7 +438,7 @@ func (this *Protobuf) readResponse(connection net.Conn) (*v1.Message, error) {
 	return response, nil
 }
 
-func (this *Protobuf) readRawMessage(connection net.Conn) ([]byte, error) {
+func readRawMessage(connection net.Conn) ([]byte, error) {
 	data := make([]byte, 4096)
 	bytesRead, err := connection.Read(data)
 	if err != nil {

@@ -28,7 +28,7 @@ var _ = Describe("Client", func() {
 			serverPort:  40404,
 		}
 
-		cluster = NewGeodeCluster(config)
+		cluster = NewGeodeCluster(config).WithSecurity("cluster,data", "cluster,data")
 		err := cluster.Start()
 		Expect(err).To(BeNil())
 	})
