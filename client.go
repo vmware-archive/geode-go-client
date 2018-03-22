@@ -47,7 +47,10 @@ func (this *Client) Put(region string, key, value interface{}) error {
 // passed, the data retrieved from the region will be attempted to be unmarshalled as JSON
 // into the supplied value.
 func (this *Client) Get(region string, key interface{}, value ...interface{}) (interface{}, error) {
-	return this.connector.Get(region, key, value)
+	if len(value) > 0 {
+		return this.connector.Get(region, key, value[0])
+	}
+	return this.connector.Get(region, key, nil)
 }
 
 // PutAll adds multiple key/value pairs to a single region. Entries must be in the form of
