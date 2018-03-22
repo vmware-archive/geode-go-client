@@ -59,12 +59,12 @@ Arbitrary structs are converted to JSON when they are `put` into a region:
     }
     
     v := &MyStruct{"Joe", 42}
-    client.Put("REGEION", "Joe", v)
+    client.Put("REGION", "Joe", v)
 
 Similarly, to retrieve the data:
 
     v := &MyStruct{}
-    x := client.Get("REGEION", "Joe", v)
+    x := client.Get("REGION", "Joe", v)
 
 v is optional for Get() and is only used if the data being retrieved is JSON. In the
 above example, x (returned from Get()) ends up pointing to v and is thus redundant.
