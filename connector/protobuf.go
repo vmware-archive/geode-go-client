@@ -1,15 +1,15 @@
 package connector
 
 import (
-	"net"
-	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
-	"github.com/gemfire/geode-go-client/protobuf"
-	"github.com/golang/protobuf/proto"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gemfire/geode-go-client/protobuf"
+	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
+	"github.com/golang/protobuf/proto"
 	"io"
+	"net"
 	"reflect"
-	"encoding/json"
 )
 
 //go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf protocolVersion.proto
@@ -58,7 +58,7 @@ func (this *Protobuf) Handshake() (err error) {
 		return err
 	}
 
-	if ! ack.GetVersionAccepted() {
+	if !ack.GetVersionAccepted() {
 		return errors.New("handshake did not succeed")
 	}
 
@@ -79,6 +79,37 @@ func (this *Protobuf) Put(region string, k, v interface{}) (err error) {
 	put := &v1.Message{
 		MessageType: &v1.Message_PutRequest{
 			PutRequest: &v1.PutRequest{
+				RegionName: region,
+				Entry: &v1.Entry{
+					Key:   key,
+					Value: value,
+				},
+			},
+		},
+	}
+
+	_, err = this.doOperation(put)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (this *Protobuf) PutIfAbsent(region string, k, v interface{}) (err error) {
+	key, err := EncodeValue(k)
+	if err != nil {
+		return err
+	}
+
+	value, err := EncodeValue(v)
+	if err != nil {
+		return err
+	}
+
+	put := &v1.Message{
+		MessageType: &v1.Message_PutIfAbsentRequest{
+			PutIfAbsentRequest: &v1.PutIfAbsentRequest{
 				RegionName: region,
 				Entry: &v1.Entry{
 					Key:   key,
@@ -212,7 +243,7 @@ func (this *Protobuf) PutAll(region string, entries interface{}) (map[interface{
 		}
 
 		e := &v1.Entry{
-			Key: key,
+			Key:   key,
 			Value: value,
 		}
 
@@ -290,7 +321,7 @@ func (this *Protobuf) Size(r string) (int32, error) {
 	return size, nil
 }
 
-func (this *Protobuf) ExecuteOnRegion(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error){
+func (this *Protobuf) ExecuteOnRegion(functionId, region string, functionArgs interface{}, keyFilter []interface{}) ([]interface{}, error) {
 	args, err := EncodeValue(functionArgs)
 	if err != nil {
 		return nil, err
@@ -315,7 +346,7 @@ func (this *Protobuf) ExecuteOnRegion(functionId, region string, functionArgs in
 	return decodedFunctionResults(results)
 }
 
-func (this *Protobuf) ExecuteOnMembers(functionId string, members []string, functionArgs interface{}) ([]interface{}, error){
+func (this *Protobuf) ExecuteOnMembers(functionId string, members []string, functionArgs interface{}) ([]interface{}, error) {
 	args, err := EncodeValue(functionArgs)
 	if err != nil {
 		return nil, err
@@ -340,7 +371,7 @@ func (this *Protobuf) ExecuteOnMembers(functionId string, members []string, func
 	return decodedFunctionResults(results)
 }
 
-func (this *Protobuf) ExecuteOnGroups(functionId string, groups []string, functionArgs interface{}) ([]interface{}, error){
+func (this *Protobuf) ExecuteOnGroups(functionId string, groups []string, functionArgs interface{}) ([]interface{}, error) {
 	args, err := EncodeValue(functionArgs)
 	if err != nil {
 		return nil, err

@@ -1,13 +1,13 @@
 package connector_test
 
 import (
+	"github.com/gemfire/geode-go-client/connector"
+	"github.com/gemfire/geode-go-client/connector/connectorfakes"
+	"github.com/gemfire/geode-go-client/protobuf"
+	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
+	"github.com/golang/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
-	"github.com/gemfire/geode-go-client/protobuf"
-	"github.com/gemfire/geode-go-client/connector"
-	"github.com/golang/protobuf/proto"
-	"github.com/gemfire/geode-go-client/connector/connectorfakes"
 )
 
 //go:generate counterfeiter net.Conn
@@ -53,8 +53,8 @@ var _ = Describe("Client", func() {
 				switch callCount {
 				case 0:
 					ack = &v1.Message{
-						MessageType: &v1.Message_AuthenticationResponse{
-							AuthenticationResponse: &v1.AuthenticationResponse{
+						MessageType: &v1.Message_HandshakeResponse{
+							HandshakeResponse: &v1.HandshakeResponse{
 								Authenticated: true,
 							},
 						},
@@ -81,8 +81,8 @@ var _ = Describe("Client", func() {
 
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				ack := &v1.Message{
-					MessageType: &v1.Message_AuthenticationResponse{
-						AuthenticationResponse: &v1.AuthenticationResponse{
+					MessageType: &v1.Message_HandshakeResponse{
+						HandshakeResponse: &v1.HandshakeResponse{
 							Authenticated: false,
 						},
 					},
@@ -119,7 +119,7 @@ var _ = Describe("Client", func() {
 						ErrorResponse: &v1.ErrorResponse{
 							Error: &v1.Error{
 								ErrorCode: 1,
-								Message: "error from fake",
+								Message:   "error from fake",
 							},
 						},
 					},
@@ -142,6 +142,53 @@ var _ = Describe("Client", func() {
 
 			json := struct{ A int }{1}
 			Expect(connection.Put("foo", "A", json)).To(BeNil())
+		})
+	})
+
+	Context("PutIfAbsent", func() {
+		It("does not return an error", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				response := &v1.Message{
+					MessageType: &v1.Message_PutIfAbsentRequest{
+						PutIfAbsentRequest: &v1.PutIfAbsentRequest{},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			Expect(connection.PutIfAbsent("foo", "A", "B")).To(BeNil())
+		})
+
+		It("handles errors correctly", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				response := &v1.Message{
+					MessageType: &v1.Message_ErrorResponse{
+						ErrorResponse: &v1.ErrorResponse{
+							Error: &v1.Error{
+								ErrorCode: 1,
+								Message:   "error from fake",
+							},
+						},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			Expect(connection.PutIfAbsent("foo", "A", "B")).To(MatchError("error from fake (1)"))
+		})
+
+		It("can putIfAbsent an anonymous struct", func() {
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				response := &v1.Message{
+					MessageType: &v1.Message_PutIfAbsentRequest{
+						PutIfAbsentRequest: &v1.PutIfAbsentRequest{},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			json := struct{ A int }{1}
+			Expect(connection.PutIfAbsent("foo", "A", json)).To(BeNil())
 		})
 	})
 
@@ -276,7 +323,7 @@ var _ = Describe("Client", func() {
 				response := &v1.Message{
 					MessageType: &v1.Message_GetAllResponse{
 						GetAllResponse: &v1.GetAllResponse{
-							Entries: entries,
+							Entries:  entries,
 							Failures: failures,
 						},
 					},
@@ -284,7 +331,7 @@ var _ = Describe("Client", func() {
 				return writeFakeMessage(response, b)
 			}
 
-			keys := []interface{} {
+			keys := []interface{}{
 				"A", 11,
 			}
 			entries, failures, err := connection.GetAll("foo", keys)
@@ -298,9 +345,9 @@ var _ = Describe("Client", func() {
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				entries := make([]*v1.Entry, 0)
 				k, _ := connector.EncodeValue("A")
-				v, _:= connector.EncodeValue(888)
+				v, _ := connector.EncodeValue(888)
 				entries = append(entries, &v1.Entry{
-					Key: k,
+					Key:   k,
 					Value: v,
 				})
 
@@ -310,14 +357,14 @@ var _ = Describe("Client", func() {
 					Key: k2,
 					Error: &v1.Error{
 						ErrorCode: 1,
-						Message: "getall failure",
+						Message:   "getall failure",
 					},
 				})
 
 				response := &v1.Message{
 					MessageType: &v1.Message_GetAllResponse{
 						GetAllResponse: &v1.GetAllResponse{
-							Entries: entries,
+							Entries:  entries,
 							Failures: failures,
 						},
 					},
@@ -325,7 +372,7 @@ var _ = Describe("Client", func() {
 				return writeFakeMessage(response, b)
 			}
 
-			keys := []interface{} {
+			keys := []interface{}{
 				"A", 11,
 			}
 			entries, failures, err := connection.GetAll("foo", keys)
@@ -396,9 +443,9 @@ var _ = Describe("Client", func() {
 				response := &v1.Message{
 					MessageType: &v1.Message_ExecuteFunctionOnRegionResponse{
 						ExecuteFunctionOnRegionResponse: &v1.ExecuteFunctionOnRegionResponse{
- 							Results: []*v1.EncodedValue{
- 								v_1,
- 								v_2,
+							Results: []*v1.EncodedValue{
+								v_1,
+								v_2,
 							},
 						},
 					},
@@ -421,9 +468,9 @@ var _ = Describe("Client", func() {
 				response := &v1.Message{
 					MessageType: &v1.Message_ExecuteFunctionOnMemberResponse{
 						ExecuteFunctionOnMemberResponse: &v1.ExecuteFunctionOnMemberResponse{
- 							Results: []*v1.EncodedValue{
- 								v_1,
- 								v_2,
+							Results: []*v1.EncodedValue{
+								v_1,
+								v_2,
 							},
 						},
 					},
@@ -446,9 +493,9 @@ var _ = Describe("Client", func() {
 				response := &v1.Message{
 					MessageType: &v1.Message_ExecuteFunctionOnGroupResponse{
 						ExecuteFunctionOnGroupResponse: &v1.ExecuteFunctionOnGroupResponse{
- 							Results: []*v1.EncodedValue{
- 								v_1,
- 								v_2,
+							Results: []*v1.EncodedValue{
+								v_1,
+								v_2,
 							},
 						},
 					},

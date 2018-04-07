@@ -42,6 +42,11 @@ func (this *Client) Put(region string, key, value interface{}) error {
 	return this.connector.Put(region, key, value)
 }
 
+// Put data into a region if the key is not present. key and value must be a supported type.
+func (this *Client) PutIfAbsent(region string, key, value interface{}) error {
+	return this.connector.PutIfAbsent(region, key, value)
+}
+
 // Get an entry from a region using the specified key. It is the callers' responsibility
 // to perform any type-assertion on the returned value. If a single, optional value is
 // passed, the data retrieved from the region will be attempted to be unmarshalled as JSON
