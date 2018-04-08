@@ -111,8 +111,8 @@ var _ = Describe("Client", func() {
 
 	Describe("PutIfAbsent", func() {
 		It("should write data to region only if absent", func() {
-			// do a put first
-			cluster.client.Put("FOO", "A", 777)
+			// putIfAbsent actually puts if absent
+			cluster.client.PutIfAbsent("FOO", "A", 777)
 			v, err := cluster.client.Get("FOO", "A")
 			Expect(err).To(BeNil())
 			Expect(v).ToNot(BeNil())
