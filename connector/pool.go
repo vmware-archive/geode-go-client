@@ -1,8 +1,8 @@
 package connector
 
 import (
-	"net"
 	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
+	"net"
 )
 
 type AuthenticationError string
@@ -12,10 +12,10 @@ func (e AuthenticationError) Error() string {
 }
 
 type Pool struct {
-	connection net.Conn
+	connection          net.Conn
 	needsAuthentication bool
-	username string
-	password string
+	username            string
+	password            string
 }
 
 func NewPool(c net.Conn) *Pool {
@@ -43,8 +43,8 @@ func (this *Pool) authenticateConnection() (net.Conn, error) {
 	creds["security-password"] = this.password
 
 	request := &v1.Message{
-		MessageType: &v1.Message_AuthenticationRequest{
-			AuthenticationRequest: &v1.AuthenticationRequest{
+		MessageType: &v1.Message_HandshakeRequest{
+			HandshakeRequest: &v1.HandshakeRequest{
 				Credentials: creds,
 			},
 		},
@@ -55,7 +55,7 @@ func (this *Pool) authenticateConnection() (net.Conn, error) {
 		return nil, err
 	}
 
-	if ! response.GetAuthenticationResponse().GetAuthenticated() {
+	if !response.GetHandshakeResponse().GetAuthenticated() {
 		return nil, AuthenticationError("connection not authenticated")
 	}
 

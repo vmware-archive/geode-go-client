@@ -72,8 +72,6 @@ var _ = Describe("Client", func() {
 
 			entries, _, err := cluster.client.GetAll("FOO", keys)
 			Expect(err).To(BeNil())
-			//Ω(failures).Should(HaveLen(1)) - Looks like failures does not contain "unknownkey"
-			//Ω(entries).Should(HaveLen(2))
 			Ω(entries).Should(ContainElement(BeEquivalentTo("Apple")))
 			Ω(entries).Should(ContainElement(BeEquivalentTo("Ball")))
 		})
@@ -108,6 +106,24 @@ var _ = Describe("Client", func() {
 			//Ω(entries).Should(HaveLen(2))
 			Ω(entries).Should(ContainElement(BeEquivalentTo(777)))
 			Ω(entries).Should(ContainElement(BeEquivalentTo("Jumbo")))
+		})
+	})
+
+	Describe("PutIfAbsent", func() {
+		It("should write data to region only if absent", func() {
+			// putIfAbsent actually puts if absent
+			cluster.client.PutIfAbsent("FOO", "A", 777)
+			v, err := cluster.client.Get("FOO", "A")
+			Expect(err).To(BeNil())
+			Expect(v).ToNot(BeNil())
+			Expect(v).To(BeEquivalentTo(777))
+
+			// putIfAbsent should not overwrite existing value
+			cluster.client.PutIfAbsent("FOO", "A", 888)
+			v, err = cluster.client.Get("FOO", "A")
+			Expect(err).To(BeNil())
+			Expect(v).ToNot(BeNil())
+			Expect(v).To(BeEquivalentTo(777))
 		})
 	})
 })
