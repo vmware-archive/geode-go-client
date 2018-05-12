@@ -10,6 +10,11 @@ import (
 
 var _ = Describe("Client", func() {
 
+	type Person struct {
+		Id   int     `json:"id"`
+		Name string  `json:"name"`
+	}
+
 	var (
 		tempDir    string
 		tempDirErr error
@@ -124,6 +129,20 @@ var _ = Describe("Client", func() {
 			Expect(err).To(BeNil())
 			Expect(v).ToNot(BeNil())
 			Expect(v).To(BeEquivalentTo(777))
+		})
+	})
+
+	Describe("PutStruct", func() {
+		It("should write and read a struct as JSON", func() {
+			p := &Person{
+				Id: 77,
+				Name: "Joe Bloggs",
+			}
+			cluster.client.Put("FOO", "joe", p)
+
+			r := &Person{}
+			cluster.client.Get("FOO", "joe", r)
+			Expect(r).To(Equal(p))
 		})
 	})
 })

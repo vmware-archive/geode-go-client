@@ -54,8 +54,8 @@ Write some client code:
 Arbitrary structs are converted to JSON when they are `put` into a region:
 
     type MyStruct struct{
-        Name string
-        Age  int
+        Name string  `json:"name"`
+        Age  int     `json:"age"`
     }
     
     v := &MyStruct{"Joe", 42}
