@@ -10,9 +10,14 @@ import (
 
 var _ = Describe("Client", func() {
 
+	type Address struct {
+		Street string `json:"street"`
+	}
+
 	type Person struct {
-		Id   int     `json:"id"`
-		Name string  `json:"name"`
+		Id      int      `json:"id"`
+		Name    string   `json:"name"`
+		Address *Address `json:"address"`
 	}
 
 	var (
@@ -77,8 +82,8 @@ var _ = Describe("Client", func() {
 
 			entries, _, err := cluster.client.GetAll("FOO", keys)
 			Expect(err).To(BeNil())
-			Ω(entries).Should(ContainElement(BeEquivalentTo("Apple")))
-			Ω(entries).Should(ContainElement(BeEquivalentTo("Ball")))
+			Expect(entries).Should(ContainElement(BeEquivalentTo("Apple")))
+			Expect(entries).Should(ContainElement(BeEquivalentTo("Ball")))
 		})
 	})
 
@@ -107,10 +112,8 @@ var _ = Describe("Client", func() {
 
 			entries, _, err = cluster.client.GetAll("FOO", keys)
 			Expect(err).To(BeNil())
-			//Ω(failures).Should(HaveLen(1)) - Looks like failures does not contain "unknownkey"
-			//Ω(entries).Should(HaveLen(2))
-			Ω(entries).Should(ContainElement(BeEquivalentTo(777)))
-			Ω(entries).Should(ContainElement(BeEquivalentTo("Jumbo")))
+			Expect(entries).Should(ContainElement(BeEquivalentTo(777)))
+			Expect(entries).Should(ContainElement(BeEquivalentTo("Jumbo")))
 		})
 	})
 
@@ -135,13 +138,30 @@ var _ = Describe("Client", func() {
 	Describe("PutStruct", func() {
 		It("should write and read a struct as JSON", func() {
 			p := &Person{
-				Id: 77,
+				Id:   77,
 				Name: "Joe Bloggs",
 			}
 			cluster.client.Put("FOO", "joe", p)
 
 			r := &Person{}
 			cluster.client.Get("FOO", "joe", r)
+			Expect(r).To(Equal(p))
+		})
+	})
+
+	Describe("PutStruct", func() {
+		FIt("should write and read a struct as JSON", func() {
+			a := &Address{Street: "Main Street"}
+
+			p := &Person{
+				Id:      77,
+				Name:    "Joe Bloggs",
+				Address: a,
+			}
+			cluster.client.Put("FOO", 77, p)
+
+			r := &Person{}
+			cluster.client.Get("FOO", 77, r)
 			Expect(r).To(Equal(p))
 		})
 	})
