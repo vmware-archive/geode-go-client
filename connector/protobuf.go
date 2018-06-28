@@ -523,12 +523,17 @@ func EncodeValue(val interface{}) (*v1.EncodedValue, error) {
 	case string:
 		ev.Value = &v1.EncodedValue_StringResult{k}
 	default:
-		// Assume we have some struct and want to turn it into JSON
-		j, err := json.Marshal(k)
-		if err != nil {
-			return nil, err
+		// <nil> is not a type
+		if k == nil {
+			ev.Value = &v1.EncodedValue_NullResult{}
+		} else {
+			// Assume we have some struct and want to turn it into JSON
+			j, err := json.Marshal(k)
+			if err != nil {
+				return nil, err
+			}
+			ev.Value = &v1.EncodedValue_JsonObjectResult{string(j)}
 		}
-		ev.Value = &v1.EncodedValue_JsonObjectResult{string(j)}
 	}
 
 	return ev, nil
@@ -563,7 +568,7 @@ func DecodeValue(value *v1.EncodedValue, ref interface{}) (interface{}, error) {
 			return nil, err
 		}
 		decodedValue = ref
-	case nil:
+	case *v1.EncodedValue_NullResult, nil:
 		decodedValue = nil
 	default:
 		return nil, errors.New(fmt.Sprintf("unable to decode type: %T", v))

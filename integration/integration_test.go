@@ -68,6 +68,13 @@ var _ = Describe("Client", func() {
 			Expect(v).ToNot(BeNil())
 			Expect(v).To(Equal("1"))
 		})
+
+		It("should return nil for a non-existent key", func() {
+			// use gfsh to put a key/value
+			v, err := cluster.client.Get("FOO", "UNKNOWN")
+			Expect(err).To(BeNil())
+			Expect(v).To(BeNil())
+		})
 	})
 
 	Describe("GetAll", func() {
@@ -147,10 +154,8 @@ var _ = Describe("Client", func() {
 			cluster.client.Get("FOO", "joe", r)
 			Expect(r).To(Equal(p))
 		})
-	})
 
-	Describe("PutStruct", func() {
-		FIt("should write and read a struct as JSON", func() {
+		It("should write and read a struct as JSON when structs are nested", func() {
 			a := &Address{Street: "Main Street"}
 
 			p := &Person{

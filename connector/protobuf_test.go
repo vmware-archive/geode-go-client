@@ -225,6 +225,8 @@ var _ = Describe("Client", func() {
 					v, _ = connector.EncodeValue("9")
 				case 10:
 					v, _ = connector.EncodeValue(testStruct)
+				case 11:
+					v, _ = connector.EncodeValue(nil)
 				}
 				callCount += 1
 
@@ -254,6 +256,8 @@ var _ = Describe("Client", func() {
 			Expect(err).To(BeNil())
 			Expect(ref).To(Equal(testStruct))
 			Expect(x).To(Equal(testStruct))
+
+			Expect(connection.Get("foo", "A", nil)).To(BeNil())
 		})
 	})
 
