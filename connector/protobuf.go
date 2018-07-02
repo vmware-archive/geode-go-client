@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/gemfire/geode-go-client/protobuf"
 	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
+	"github.com/gemfire/geode-go-client/query"
 	"github.com/golang/protobuf/proto"
 	"io"
 	"net"
@@ -396,6 +397,104 @@ func (this *Protobuf) ExecuteOnGroups(functionId string, groups []string, functi
 	return decodedFunctionResults(results)
 }
 
+func (this *Protobuf) QuerySingleResult(query *query.Query) (interface{}, error) {
+	response, err := this.doQuery(query.QueryString, query.BindParameters)
+	if err != nil {
+		return nil, err
+	}
+
+	ref := cloneStruct(query.Reference)
+	result, err := DecodeValue(response.GetOqlQueryResponse().GetSingleResult(), ref)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("unable to decode query result: %s", err.Error()))
+	}
+
+	return result, nil
+}
+
+func (this *Protobuf) QueryListResult(query *query.Query) ([]interface{}, error) {
+	response, err := this.doQuery(query.QueryString, query.BindParameters)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build up a slice of results
+	encodedResultList := response.GetOqlQueryResponse().GetListResult().GetElement()
+	results := make([]interface{}, len(encodedResultList))
+
+	for i, v := range encodedResultList {
+		ref := cloneStruct(query.Reference)
+		val, err := DecodeValue(v, ref)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("unable to decode query result: %s", err.Error()))
+		}
+		results[i] = val
+	}
+
+	return results, nil
+}
+
+func (this *Protobuf) QueryTableResult(query *query.Query) (map[string][]interface{}, error) {
+	response, err := this.doQuery(query.QueryString, query.BindParameters)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build up a slice of results
+	table := response.GetOqlQueryResponse().GetTableResult()
+	columns := table.GetFieldName()
+	valueList := table.GetRow()
+	results := make(map[string][]interface{}, len(columns))
+
+	for i, columnName := range columns {
+		ref := cloneStruct(query.Reference)
+		val, err := DecodeValueList(valueList[i], ref)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("unable to decode query result: %s", err.Error()))
+		}
+		results[columnName] = val
+	}
+
+	return results, nil
+}
+
+// Clone the struct of the passed in value and return a pointer to a new, empty instance. Does not clone
+// the value itself.
+func cloneStruct(i interface{}) interface{} {
+	if i == nil {
+		return nil
+	}
+	return reflect.New(reflect.Indirect(reflect.ValueOf(i)).Type()).Interface()
+}
+
+func (this *Protobuf) doQuery(query string, bindParameters []interface{}) (*v1.Message, error) {
+	encodedKeys := make([]*v1.EncodedValue, 0, len(bindParameters))
+	for i := 0; i < len(bindParameters); i++ {
+		key, err := EncodeValue(bindParameters[i])
+		if err != nil {
+			return nil, err
+		}
+
+		encodedKeys = append(encodedKeys, key)
+	}
+
+	request := &v1.Message{
+		MessageType: &v1.Message_OqlQueryRequest{
+			OqlQueryRequest: &v1.OQLQueryRequest{
+				Query: query,
+				BindParameter: encodedKeys,
+			},
+		},
+	}
+
+	response, err := this.doOperation(request)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
 func decodedFunctionResults(results []*v1.EncodedValue) ([]interface{}, error) {
 	decodedEntries := make([]interface{}, len(results))
 
@@ -539,6 +638,57 @@ func EncodeValue(val interface{}) (*v1.EncodedValue, error) {
 	return ev, nil
 }
 
+func EncodeList(list interface{}) ([]*v1.EncodedValue, error) {
+	listSlice := reflect.ValueOf(list)
+	if listSlice.Kind() != reflect.Slice && listSlice.Kind() != reflect.Array {
+		return nil, errors.New("argument must be a slice or array")
+	}
+
+	encodedEntries := make([]*v1.EncodedValue, 0, listSlice.Len())
+	for i := 0; i < listSlice.Len(); i++ {
+		key, err := EncodeValue(listSlice.Index(i).Interface())
+		if err != nil {
+			return nil, err
+		}
+
+		encodedEntries = append(encodedEntries, key)
+	}
+
+	return encodedEntries, nil
+}
+
+func EncodeValueList(list interface{}) (*v1.EncodedValueList, error) {
+	encodedList, err := EncodeList(list)
+	if err != nil {
+		return nil, err
+	}
+
+	return &v1.EncodedValueList{Element: encodedList}, nil
+}
+
+func EncodeTable(table map[string][]interface{}) (*v1.Table, error) {
+	columnNames := make([]string, len(table))
+	columns := make([]*v1.EncodedValueList, len(table))
+
+	idx := 0
+	for k, v := range table {
+		columnNames[idx] = k
+		list, err := EncodeValueList(v)
+		if err != nil {
+			return nil, err
+		}
+		columns[idx] = list
+		idx += 1
+	}
+
+	result := &v1.Table{
+		FieldName: columnNames,
+		Row:       columns,
+	}
+
+	return result, nil
+}
+
 func DecodeValue(value *v1.EncodedValue, ref interface{}) (interface{}, error) {
 	var decodedValue interface{}
 
@@ -575,4 +725,19 @@ func DecodeValue(value *v1.EncodedValue, ref interface{}) (interface{}, error) {
 	}
 
 	return decodedValue, nil
+}
+
+func DecodeValueList(list *v1.EncodedValueList, ref interface{}) ([]interface{}, error) {
+	decodedValueList := make([]interface{}, len(list.GetElement()))
+
+	for i, v := range list.GetElement() {
+		val, err := DecodeValue(v, ref)
+		if err != nil {
+			return nil, err
+		}
+
+		decodedValueList[i] = val
+	}
+
+	return decodedValueList, nil
 }

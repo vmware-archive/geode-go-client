@@ -1,4 +1,4 @@
-package integration
+package integration_test
 
 import (
 	"io/ioutil"
@@ -6,6 +6,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "github.com/gemfire/geode-go-client/integration"
+	"fmt"
 )
 
 var _ = Describe("Client", func() {
@@ -31,11 +33,11 @@ var _ = Describe("Client", func() {
 		Expect(tempDirErr).To(BeNil())
 
 		config := ClusterConfig{
-			clusterDir:  tempDir,
-			locatorPort: 10334,
-			locatorName: "locator1",
-			serverName:  "server1",
-			serverPort:  40404,
+			ClusterDir:  tempDir,
+			LocatorPort: 10334,
+			LocatorName: "locator1",
+			ServerName:  "server1",
+			ServerPort:  40404,
 		}
 
 		cluster = NewGeodeCluster(config).WithSecurity("cluster,data", "cluster,data")
@@ -44,13 +46,13 @@ var _ = Describe("Client", func() {
 	})
 
 	BeforeEach(func() {
-		err := cluster.gfsh("create region --name=FOO --type=REPLICATE")
+		err := cluster.Gfsh("create region --name=FOO --type=REPLICATE")
 		Expect(err).To(BeNil())
 
 	})
 
 	AfterEach(func() {
-		cluster.gfsh("destroy region --name=FOO")
+		cluster.Gfsh("destroy region --name=FOO")
 
 	})
 
@@ -62,8 +64,8 @@ var _ = Describe("Client", func() {
 	Describe("Get", func() {
 		It("should get existing data", func() {
 			// use gfsh to put a key/value
-			cluster.gfsh("put --key=\"A\" --value=1 --region=FOO")
-			v, err := cluster.client.Get("FOO", "A")
+			cluster.Gfsh("put --key=\"A\" --value=1 --region=FOO")
+			v, err := cluster.Client.Get("FOO", "A")
 			Expect(err).To(BeNil())
 			Expect(v).ToNot(BeNil())
 			Expect(v).To(Equal("1"))
@@ -71,7 +73,7 @@ var _ = Describe("Client", func() {
 
 		It("should return nil for a non-existent key", func() {
 			// use gfsh to put a key/value
-			v, err := cluster.client.Get("FOO", "UNKNOWN")
+			v, err := cluster.Client.Get("FOO", "UNKNOWN")
 			Expect(err).To(BeNil())
 			Expect(v).To(BeNil())
 		})
@@ -80,14 +82,14 @@ var _ = Describe("Client", func() {
 	Describe("GetAll", func() {
 		It("should get existing data", func() {
 			// use gfsh to put some key/values
-			cluster.gfsh("put --key=\"A\" --value=\"Apple\" --region=FOO")
-			cluster.gfsh("put --key=\"B\" --value=\"Ball\" --region=FOO")
+			cluster.Gfsh("put --key=\"A\" --value=\"Apple\" --region=FOO")
+			cluster.Gfsh("put --key=\"B\" --value=\"Ball\" --region=FOO")
 
 			keys := []interface{}{
 				"A", "B", "unknownkey",
 			}
 
-			entries, _, err := cluster.client.GetAll("FOO", keys)
+			entries, _, err := cluster.Client.GetAll("FOO", keys)
 			Expect(err).To(BeNil())
 			Expect(entries).Should(ContainElement(BeEquivalentTo("Apple")))
 			Expect(entries).Should(ContainElement(BeEquivalentTo("Ball")))
@@ -96,8 +98,8 @@ var _ = Describe("Client", func() {
 
 	Describe("Put", func() {
 		It("should write data to region", func() {
-			cluster.client.Put("FOO", "A", 777)
-			v, err := cluster.client.Get("FOO", "A")
+			cluster.Client.Put("FOO", "A", 777)
+			v, err := cluster.Client.Get("FOO", "A")
 			Expect(err).To(BeNil())
 			Expect(v).ToNot(BeNil())
 			Expect(v).To(BeEquivalentTo(777))
@@ -110,14 +112,14 @@ var _ = Describe("Client", func() {
 			entries["A"] = 777
 			entries["B"] = "Jumbo"
 
-			_, err := cluster.client.PutAll("FOO", entries)
+			_, err := cluster.Client.PutAll("FOO", entries)
 			Expect(err).To(BeNil())
 
 			keys := []interface{}{
 				"A", "B", "unknownkey",
 			}
 
-			entries, _, err = cluster.client.GetAll("FOO", keys)
+			entries, _, err = cluster.Client.GetAll("FOO", keys)
 			Expect(err).To(BeNil())
 			Expect(entries).Should(ContainElement(BeEquivalentTo(777)))
 			Expect(entries).Should(ContainElement(BeEquivalentTo("Jumbo")))
@@ -127,15 +129,15 @@ var _ = Describe("Client", func() {
 	Describe("PutIfAbsent", func() {
 		It("should write data to region only if absent", func() {
 			// putIfAbsent actually puts if absent
-			cluster.client.PutIfAbsent("FOO", "A", 777)
-			v, err := cluster.client.Get("FOO", "A")
+			cluster.Client.PutIfAbsent("FOO", "A", 777)
+			v, err := cluster.Client.Get("FOO", "A")
 			Expect(err).To(BeNil())
 			Expect(v).ToNot(BeNil())
 			Expect(v).To(BeEquivalentTo(777))
 
 			// putIfAbsent should not overwrite existing value
-			cluster.client.PutIfAbsent("FOO", "A", 888)
-			v, err = cluster.client.Get("FOO", "A")
+			cluster.Client.PutIfAbsent("FOO", "A", 888)
+			v, err = cluster.Client.Get("FOO", "A")
 			Expect(err).To(BeNil())
 			Expect(v).ToNot(BeNil())
 			Expect(v).To(BeEquivalentTo(777))
@@ -148,10 +150,10 @@ var _ = Describe("Client", func() {
 				Id:   77,
 				Name: "Joe Bloggs",
 			}
-			cluster.client.Put("FOO", "joe", p)
+			cluster.Client.Put("FOO", "joe", p)
 
 			r := &Person{}
-			cluster.client.Get("FOO", "joe", r)
+			cluster.Client.Get("FOO", "joe", r)
 			Expect(r).To(Equal(p))
 		})
 
@@ -163,11 +165,39 @@ var _ = Describe("Client", func() {
 				Name:    "Joe Bloggs",
 				Address: a,
 			}
-			cluster.client.Put("FOO", 77, p)
+			cluster.Client.Put("FOO", 77, p)
 
 			r := &Person{}
-			cluster.client.Get("FOO", 77, r)
+			cluster.Client.Get("FOO", 77, r)
 			Expect(r).To(Equal(p))
 		})
+	})
+
+	Describe("Querying", func() {
+		It("should query for a single return value", func() {
+			for i := 0; i < 20; i++ {
+				p := &Person{
+					Id:   i,
+					Name: fmt.Sprintf("Mr. Roboto %d", i),
+				}
+				cluster.Client.Put("FOO", i, p)
+			}
+
+			q1 := cluster.Client.Query("select count(*) from /FOO")
+			result, err := cluster.Client.QueryForListResult(q1)
+			Expect(err).To(BeNil())
+			var expected int32 = 20
+			Expect(result[0]).To(Equal(expected))
+
+			q2 := cluster.Client.Query("select * from /FOO where id = 1")
+			q2.Reference = &Person{
+				Id: 1,
+				Name: "Mr. Roboto 1",
+			}
+			another, err := cluster.Client.QueryForListResult(q2)
+			Expect(err).To(BeNil())
+			Expect(another[0].(*Person)).To(Equal(q2.Reference))
+		})
+
 	})
 })

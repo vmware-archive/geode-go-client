@@ -81,6 +81,34 @@ It does not support managing regions or other Geode constructs.
 Note that values returned will be of type `interface{}`. It is thus the responsibility
 of the caller to type assert as appropriate.
 
+#### Querying
+
+OQL queries can be performed by creating a `Query` instance and then making a  call depending
+the type of results which will be returned. For example:
+
+```go
+q := client.Query("select count(*) from /MYREGION")
+val, err := client.QueryForListResult(q)
+fmt.Printf("count(*) = %d\n", val[0])
+```
+(Perhaps counterintuitively, `count(*)` returns its result in a single element list and not as
+a single result.)
+
+When querying objects (returned as JSON) from Geode, you need to provide a reference type to the query:
+
+```go
+type Person struct{}
+
+q := client.Query("select * from /Employees")
+q.Reference = &Person{}
+people, err := q.QueryForListResult(q)
+
+// Type assert to get a usable instance
+person := people[0].(*Person)
+```
+
+#### On the servers
+
 To enable Geode's protobuf support, locators and servers must be started with the
 option `geode.feature-protobuf-protocol`.
     
@@ -103,3 +131,19 @@ re-generate the bindings:
     
 The `protobuf.go` file contains `go:generate` directives to do the actual work.
 
+#### Testing
+
+Tests are written in [Ginkgo](http://onsi.github.io/ginkgo/). There are both unit and integration tests.
+
+Unit tests can be executed with:
+
+```
+$ ginkgo -r connector
+```
+
+Integration tests require a Geode product directory to work:
+
+```
+$ export GEODE_HOME=<path to the Geode product directory>
+$ ginkgo -r -slowSpecThreshold 60 integration
+```

@@ -1,6 +1,9 @@
 package geode_go_client
 
-import "github.com/gemfire/geode-go-client/connector"
+import (
+	"github.com/gemfire/geode-go-client/connector"
+	. "github.com/gemfire/geode-go-client/query"
+)
 
 // A Client provides the high-level API required to interact with a Geode cluster. The API
 // supports the following key and value types:
@@ -107,3 +110,26 @@ func (this *Client) ExecuteOnMembers(functionId string, members []string, functi
 func (this *Client) ExecuteOnGroups(functionId string, groups []string, functionArgs interface{}) ([]interface{}, error) {
 	return this.connector.ExecuteOnGroups(functionId, groups, functionArgs)
 }
+
+// Create a Query object which can be used to perform a query. If the query returns some type of struct then a
+// reference type must be passed by setting the query.Reference parameter to use as a reference for the returned
+// types.
+func (this *Client) Query(query string, bindParameters ...interface{}) *Query {
+	return NewQuery(query, bindParameters...)
+}
+
+// Execute a query, returning a single result value.
+func (this *Client) QueryForSingleResult(query *Query) (interface{}, error){
+	return this.connector.QuerySingleResult(query)
+}
+
+// Execute a query, returning a list of results.
+func (this *Client) QueryForListResult(query *Query) ([]interface{}, error){
+	return this.connector.QueryListResult(query)
+}
+
+// Execute a query, returning a map of column (or field) names and the associated values for each column.
+func (this *Client) QueryForTableResult(query *Query) (map[string][]interface{}, error){
+	return this.connector.QueryTableResult(query)
+}
+

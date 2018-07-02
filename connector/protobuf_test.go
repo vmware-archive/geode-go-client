@@ -8,13 +8,15 @@ import (
 	"github.com/golang/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"strconv"
+	"github.com/gemfire/geode-go-client/query"
 )
 
 //go:generate counterfeiter net.Conn
 
 type TestStruct struct {
-	A int
-	B string
+	Value int32
+	Message string
 }
 
 var _ = Describe("Client", func() {
@@ -197,8 +199,8 @@ var _ = Describe("Client", func() {
 			var callCount = 0
 			var v *v1.EncodedValue
 			testStruct := &TestStruct{
-				A: 7,
-				B: "Hello World",
+				Value: 7,
+				Message: "Hello World",
 			}
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				switch callCount {
@@ -513,6 +515,195 @@ var _ = Describe("Client", func() {
 			var expected int32 = 777
 			Expect(result[0]).To(Equal(expected))
 			Expect(result[1]).To(Equal("Hello World"))
+		})
+	})
+
+	Context("Query for a single result", func() {
+		It("returns a single value result", func() {
+			sumOfBinds := new(int32)
+			*sumOfBinds = 0
+
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				v, _ := connector.EncodeValue(*sumOfBinds)
+				response := &v1.Message{
+					MessageType: &v1.Message_OqlQueryResponse{
+						OqlQueryResponse: &v1.OQLQueryResponse{
+							Result: &v1.OQLQueryResponse_SingleResult{
+								SingleResult: v,
+							},
+						},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			fakeConn.WriteStub = func(b []byte) (int, error) {
+				p := proto.NewBuffer(b)
+				response := &v1.Message{}
+				if err := p.DecodeMessage(response); err != nil {
+					return 0, err
+				}
+
+				request := response.GetOqlQueryRequest()
+
+				for _, param := range request.BindParameter {
+					val, _ := connector.DecodeValue(param, nil)
+					*sumOfBinds += val.(int32)
+				}
+
+				return len(b), nil
+			}
+
+			// A little hacky perhaps, but the result of this query is simply the addition of all the bind values
+			q := query.NewQuery("select foo", 1, 2, 3, 5)
+			result, err := connection.QuerySingleResult(q)
+
+			Expect(err).To(BeNil())
+			var expected int32 = 11
+			Expect(result).To(Equal(expected))
+		})
+	})
+
+	Context("Query for a list result", func() {
+		It("returns a list of results", func() {
+			listOfBinds := make([]interface{}, 0)
+
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				v, _ := connector.EncodeValueList(listOfBinds)
+				response := &v1.Message{
+					MessageType: &v1.Message_OqlQueryResponse{
+						OqlQueryResponse: &v1.OQLQueryResponse{
+							Result: &v1.OQLQueryResponse_ListResult{
+								ListResult: v,
+							},
+						},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			fakeConn.WriteStub = func(b []byte) (int, error) {
+				p := proto.NewBuffer(b)
+				response := &v1.Message{}
+				if err := p.DecodeMessage(response); err != nil {
+					return 0, err
+				}
+
+				request := response.GetOqlQueryRequest()
+
+				for _, param := range request.BindParameter {
+					val, _ := connector.DecodeValue(param, nil)
+					listOfBinds = append(listOfBinds, val)
+				}
+
+				return len(b), nil
+			}
+
+			// A little hacky perhaps, but the result of this query is simply the bind values
+			// returned as a the result.
+			q := query.NewQuery("select foo", 1, "hey")
+			result, err := connection.QueryListResult(q)
+
+			Expect(err).To(BeNil())
+			var one int32 = 1
+			Expect(result[0]).To(Equal(one))
+			Expect(result[1]).To(Equal("hey"))
+		})
+	})
+
+	Context("Query for a list result", func() {
+		It("returns a struct when a reference is also provided", func() {
+			listOfBinds := make([]interface{}, 0)
+
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				v, _ := connector.EncodeValueList(listOfBinds)
+				response := &v1.Message{
+					MessageType: &v1.Message_OqlQueryResponse{
+						OqlQueryResponse: &v1.OQLQueryResponse{
+							Result: &v1.OQLQueryResponse_ListResult{
+								ListResult: v,
+							},
+						},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			fakeConn.WriteStub = func(b []byte) (int, error) {
+				p := proto.NewBuffer(b)
+				response := &v1.Message{}
+				if err := p.DecodeMessage(response); err != nil {
+					return 0, err
+				}
+
+				request := response.GetOqlQueryRequest()
+
+				for _, param := range request.BindParameter {
+					val, _ := connector.DecodeValue(param, nil)
+					listOfBinds = append(listOfBinds, &TestStruct{Value: val.(int32)})
+				}
+
+				return len(b), nil
+			}
+
+			// A little hacky perhaps, but the result of this query is simply the bind values
+			// returned as the result.
+			q := query.NewQuery("select foo", 1, 2)
+			q.Reference = &TestStruct{}
+			result, err := connection.QueryListResult(q)
+
+			Expect(err).To(BeNil())
+			Expect(result[0]).To(Equal(&TestStruct{Value: 1}))
+			Expect(result[1]).To(Equal(&TestStruct{Value: 2}))
+		})
+	})
+
+	Context("Query for a table result", func() {
+		It("returns a map of results", func() {
+			listOfBinds := make(map[string][]interface{}, 0)
+
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				v, _ := connector.EncodeTable(listOfBinds)
+				response := &v1.Message{
+					MessageType: &v1.Message_OqlQueryResponse{
+						OqlQueryResponse: &v1.OQLQueryResponse{
+							Result: &v1.OQLQueryResponse_TableResult{
+								TableResult: v,
+							},
+						},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			fakeConn.WriteStub = func(b []byte) (int, error) {
+				p := proto.NewBuffer(b)
+				response := &v1.Message{}
+				if err := p.DecodeMessage(response); err != nil {
+					return 0, err
+				}
+
+				request := response.GetOqlQueryRequest()
+
+				idx := 0
+				for _, param := range request.BindParameter {
+					val, _ := connector.DecodeValue(param, nil)
+					listOfBinds[strconv.Itoa(idx)] = []interface{}{val}
+					idx += 1
+				}
+
+				return len(b), nil
+			}
+
+			// A little hacky perhaps, but the result of this query is simply the bind values
+			// returned as the result.
+			q := query.NewQuery("select foo", 1, "hey")
+			result, err := connection.QueryTableResult(q)
+
+			Expect(err).To(BeNil())
+			var one int32 = 1
+			Expect(result["0"][0]).To(Equal(one))
+			Expect(result["1"][0]).To(Equal("hey"))
 		})
 	})
 })
