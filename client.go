@@ -111,13 +111,6 @@ func (this *Client) ExecuteOnGroups(functionId string, groups []string, function
 	return this.connector.ExecuteOnGroups(functionId, groups, functionArgs)
 }
 
-// Create a Query object which can be used to perform a query. If the query returns some type of struct then a
-// reference type must be passed by setting the query.Reference parameter to use as a reference for the returned
-// types.
-func (this *Client) Query(query string, bindParameters ...interface{}) *Query {
-	return NewQuery(query, bindParameters...)
-}
-
 // Execute a query, returning a single result value.
 func (this *Client) QueryForSingleResult(query *Query) (interface{}, error){
 	return this.connector.QuerySingleResult(query)

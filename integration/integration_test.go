@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	. "github.com/gemfire/geode-go-client/integration"
 	"fmt"
+	"github.com/gemfire/geode-go-client/query"
 )
 
 var _ = Describe("Client", func() {
@@ -72,8 +73,14 @@ var _ = Describe("Client", func() {
 		})
 
 		It("should return nil for a non-existent key", func() {
-			// use gfsh to put a key/value
 			v, err := cluster.Client.Get("FOO", "UNKNOWN")
+			Expect(err).To(BeNil())
+			Expect(v).To(BeNil())
+		})
+
+		It("should return nil for a non-existent key when using a reference", func() {
+			ref := &Person{}
+			v, err := cluster.Client.Get("FOO", "UNKNOWN", ref)
 			Expect(err).To(BeNil())
 			Expect(v).To(BeNil())
 		})
@@ -174,7 +181,7 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("Querying", func() {
-		It("should query for a single return value", func() {
+		It("should return a list of values", func() {
 			for i := 0; i < 20; i++ {
 				p := &Person{
 					Id:   i,
@@ -183,13 +190,13 @@ var _ = Describe("Client", func() {
 				cluster.Client.Put("FOO", i, p)
 			}
 
-			q1 := cluster.Client.Query("select count(*) from /FOO")
+			q1 := query.NewQuery("select count(*) from /FOO")
 			result, err := cluster.Client.QueryForListResult(q1)
 			Expect(err).To(BeNil())
 			var expected int32 = 20
 			Expect(result[0]).To(Equal(expected))
 
-			q2 := cluster.Client.Query("select * from /FOO where id = 1")
+			q2 := query.NewQuery("select * from /FOO where id = 1")
 			q2.Reference = &Person{
 				Id: 1,
 				Name: "Mr. Roboto 1",
@@ -197,6 +204,28 @@ var _ = Describe("Client", func() {
 			another, err := cluster.Client.QueryForListResult(q2)
 			Expect(err).To(BeNil())
 			Expect(another[0].(*Person)).To(Equal(q2.Reference))
+		})
+
+	})
+
+	Describe("Querying", func() {
+		XIt("should return a single value for UNDEFINED results", func() {
+			for i := 0; i < 20; i++ {
+				p := &Person{
+					Id:   i,
+					Name: fmt.Sprintf("Mr. Roboto %d", i),
+				}
+				cluster.Client.Put("FOO", i, p)
+			}
+
+			q1 := query.NewQuery("select f.NONEXISTENT from /FOO as f where id = 1")
+			//q1.Reference = &Person{
+			//	Id: 1,
+			//	Name: "Mr. Roboto 1",
+			//}
+			another, err := cluster.Client.QueryForListResult(q1)
+			Expect(err).To(BeNil())
+			Expect(another).To(Equal(q1.Reference))
 		})
 
 	})
