@@ -27,12 +27,15 @@ var _ = Describe("Client", func() {
 
 	BeforeEach(func() {
 		fakeConn = new(connectorfakes.FakeConn)
-		pool = connector.NewPool(fakeConn)
+		pool = connector.NewPool(fakeConn, true)
 		connection = connector.NewConnector(pool)
 	})
 
 	Context("Connect", func() {
-		It("does not return an error", func() {
+		It("performs handshake correctly", func() {
+			pool = connector.NewPool(fakeConn, false)
+			connection = connector.NewConnector(pool)
+
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				ack := &org_apache_geode_internal_protocol_protobuf.VersionAcknowledgement{
 					ServerMajorVersion: 1,
@@ -42,7 +45,7 @@ var _ = Describe("Client", func() {
 				return writeFakeMessage(ack, b)
 			}
 
-			Expect(connection.Handshake()).To(BeNil())
+			Expect(pool.GetConnection()).To(Equal(fakeConn))
 			Expect(fakeConn.WriteCallCount()).To(Equal(1))
 		})
 

@@ -28,13 +28,12 @@ func main() {
         panic(err)
     }
 
-    p := connector.NewPool(c)
+    p := connector.NewPool(c, false)
     // Optionally add user credentials
     p.AddCredentials("jbloggs", "t0p53cr3t")
     
     conn := connector.NewConnector(p)
     client := geode.NewGeodeClient(conn)
-    err = client.Connect()
     if err != nil {
         panic(err)
     }

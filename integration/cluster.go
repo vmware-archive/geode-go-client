@@ -135,7 +135,7 @@ func (g *GeodeCluster) Start() error {
 	if err != nil {
 		panic(err)
 	}
-	pool := connector.NewPool(c)
+	pool := connector.NewPool(c, false)
 
 	if g.username != nil {
 		pool.AddCredentials(*g.username, *g.password)
@@ -143,10 +143,6 @@ func (g *GeodeCluster) Start() error {
 
 	conn := connector.NewConnector(pool)
 	g.Client = geode.NewGeodeClient(conn)
-	err = g.Client.Connect()
-	if err != nil {
-		panic(err)
-	}
 
 	return nil
 }

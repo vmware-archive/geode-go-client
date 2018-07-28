@@ -4,8 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gemfire/geode-go-client/protobuf"
-	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
+		v1 "github.com/gemfire/geode-go-client/protobuf/v1"
 	"github.com/gemfire/geode-go-client/query"
 	"github.com/golang/protobuf/proto"
 	"io"
@@ -29,41 +28,6 @@ func NewConnector(pool *Pool) *Protobuf {
 	return &Protobuf{
 		pool: pool,
 	}
-}
-
-func (this *Protobuf) Handshake() (err error) {
-	connection, err := this.pool.GetUnauthenticatedConnection()
-	if err != nil {
-		return err
-	}
-
-	request := &org_apache_geode_internal_protocol_protobuf.NewConnectionClientVersion{
-		MajorVersion: MAJOR_VERSION,
-		MinorVersion: MINOR_VERSION,
-	}
-
-	err = writeMessage(connection, request)
-	if err != nil {
-		return errors.New(fmt.Sprintf("unable to write handshake: %s", err.Error()))
-	}
-
-	data, err := readRawMessage(connection)
-	if err != nil {
-		return errors.New(fmt.Sprintf("unable to read handshake: %s", err.Error()))
-	}
-
-	p := proto.NewBuffer(data)
-	ack := &org_apache_geode_internal_protocol_protobuf.VersionAcknowledgement{}
-
-	if err := p.DecodeMessage(ack); err != nil {
-		return err
-	}
-
-	if !ack.GetVersionAccepted() {
-		return errors.New("handshake did not succeed")
-	}
-
-	return nil
 }
 
 func (this *Protobuf) Put(region string, k, v interface{}) (err error) {
