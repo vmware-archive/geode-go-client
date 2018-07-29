@@ -28,13 +28,15 @@ var _ = Describe("Client", func() {
 
 	BeforeEach(func() {
 		fakeConn = new(connectorfakes.FakeConn)
-		pool = connector.NewPool(fakeConn, true)
+		pool = connector.NewPool()
+		pool.AddConnection(fakeConn, true)
 		connection = connector.NewConnector(pool)
 	})
 
 	Context("Connect", func() {
 		It("performs handshake correctly", func() {
-			pool = connector.NewPool(fakeConn, false)
+			pool = connector.NewPool()
+			pool.AddConnection(fakeConn, false)
 			connection = connector.NewConnector(pool)
 
 			fakeConn.ReadStub = func(b []byte) (int, error) {

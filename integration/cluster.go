@@ -2,14 +2,13 @@ package integration
 
 import (
 	"fmt"
-	"net"
-	"os"
+		"os"
 	"os/exec"
 	"strings"
 
 	geode "github.com/gemfire/geode-go-client"
 	"github.com/gemfire/geode-go-client/connector"
-)
+	)
 
 func geodeAddr2NetworkAddr(geodeAddr string) string {
 	networkAddr := strings.Replace(geodeAddr, "[", ":", 1)
@@ -130,12 +129,8 @@ func (g *GeodeCluster) Start() error {
 		return err
 	}
 
-	var err error
-	c, err := net.Dial("tcp", geodeAddr2NetworkAddr(g.serverAddr[0]))
-	if err != nil {
-		panic(err)
-	}
-	pool := connector.NewPool(c, false)
+	pool := connector.NewPool()
+	pool.AddServer("localhost", g.ServerPort)
 
 	if g.username != nil {
 		pool.AddCredentials(*g.username, *g.password)

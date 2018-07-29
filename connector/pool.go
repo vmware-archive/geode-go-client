@@ -25,13 +25,10 @@ type Pool struct {
 	password              string
 }
 
-func NewPool(c net.Conn, handshakeDone bool) *Pool {
-	p := &Pool{
+func NewPool() *Pool {
+	return &Pool{
 		authenticationEnabled: false,
 	}
-	p.AddConnection(c, handshakeDone)
-
-	return p
 }
 
 func (this *Pool) AddConnection(c net.Conn, handshakeDone bool) {
@@ -69,17 +66,17 @@ func (this *Pool) GetConnection() (*GeodeConnection, error) {
 		}
 	}
 
+	for i := len(this.providers) - 1; i >= 0; i-- {
+		gConn = this.providers[i].GetGeodeConnection()
+		if gConn != nil {
+			break
+		}
+		this.providers = append(this.providers[:i], this.providers[i+1:]...)
+	}
+
 	if gConn == nil {
 		return nil, errors.New("no connections available")
 	}
-
-	//var err error
-	//for i := len(this.providers) - 1; i >= 0; i-- {
-	//	gConn = this.providers[i].GetGeodeConnection()
-	//	if gConn == nil {
-	//		this.providers = append(this.providers[:i], this.providers[i+1:]...)
-	//	}
-	//}
 
 	err = gConn.handshake()
 	if err != nil {

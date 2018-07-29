@@ -9,7 +9,8 @@ import (
 	. "github.com/gemfire/geode-go-client/integration"
 	"fmt"
 	"github.com/gemfire/geode-go-client/query"
-	)
+	"time"
+)
 
 var _ = Describe("Client", func() {
 
@@ -134,7 +135,7 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("PutIfAbsent", func() {
-		FIt("should write data to region only if absent", func() {
+		It("should write data to region only if absent", func() {
 			// putIfAbsent actually puts if absent
 			cluster.Client.PutIfAbsent("FOO", "A", 777)
 			v, err := cluster.Client.Get("FOO", "A")
@@ -228,5 +229,20 @@ var _ = Describe("Client", func() {
 			Expect(another).To(Equal(q1.Reference))
 		})
 
+	})
+
+	Describe("Reconnecting", func() {
+		// Unfortunately, it seems that the only way to adjust the default is by
+		// setting it on the actual CacheServer object: cacheServer.setMaximumTimeBetweenPings()
+		It("should be able to work even after the default client idle timeout has passed", func () {
+			cluster.Client.Put("FOO", "AAA", 777)
+
+			time.Sleep(65 * time.Second)
+
+			v, err := cluster.Client.Get("FOO", "AAA")
+			Expect(err).To(BeNil())
+			Expect(v).ToNot(BeNil())
+			Expect(v).To(BeEquivalentTo(777))
+		})
 	})
 })
