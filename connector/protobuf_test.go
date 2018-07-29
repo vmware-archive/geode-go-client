@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	"strconv"
 	"github.com/gemfire/geode-go-client/query"
+	"errors"
 )
 
 //go:generate counterfeiter net.Conn
@@ -45,7 +46,9 @@ var _ = Describe("Client", func() {
 				return writeFakeMessage(ack, b)
 			}
 
-			Expect(pool.GetConnection()).To(Equal(fakeConn))
+			gConn, err := pool.GetConnection()
+			Expect(err).To(BeNil())
+			Expect(gConn.GetRawConnection()).To(Equal(fakeConn))
 			Expect(fakeConn.WriteCallCount()).To(Equal(1))
 		})
 
@@ -100,6 +103,54 @@ var _ = Describe("Client", func() {
 			Expect(err).ToNot(BeNil())
 			Expect(err).To(BeAssignableToTypeOf(connector.AuthenticationError("")))
 
+		})
+	})
+
+	Context("Automatic retry", func() {
+		It("does not retry when Write does not return an EOF error", func() {
+			fakeConn.WriteStub = func(b []byte) (int, error) {
+				return -1, errors.New("fake write error")
+			}
+
+			_, err := connection.Get("foo", "a", nil)
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(Equal("fake write error"))
+		})
+
+		It("returns correct error when no connections are available", func() {
+			fakeConn.WriteStub = func(b []byte) (int, error) {
+				return -1, errors.New("EOF")
+			}
+
+			_, err := connection.Get("foo", "a", nil)
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(Equal("no connections available"))
+		})
+
+		It("correctly retries with a new connection", func() {
+			// Connections are pulled off in the reverse order of their addition. This 'broken' connection
+			// will be used first.
+			eofFakeConn := new(connectorfakes.FakeConn)
+			pool.AddConnection(eofFakeConn, true)
+			eofFakeConn.WriteStub = func(b []byte) (int, error) {
+				return -1, errors.New("EOF")
+			}
+			fakeConn.ReadStub = func(b []byte) (int, error) {
+				v, _ := connector.EncodeValue(1)
+				response := &v1.Message{
+					MessageType: &v1.Message_GetResponse{
+						GetResponse: &v1.GetResponse{
+							Result: v,
+						},
+					},
+				}
+				return writeFakeMessage(response, b)
+			}
+
+			r, err := connection.Get("foo", "a", nil)
+			Expect(err).To(BeNil())
+			Expect(r).To(BeEquivalentTo(1))
+			Expect(eofFakeConn.WriteCallCount()).To(Equal(1))
 		})
 	})
 

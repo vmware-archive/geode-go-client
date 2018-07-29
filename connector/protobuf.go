@@ -2,14 +2,14 @@ package connector
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-		v1 "github.com/gemfire/geode-go-client/protobuf/v1"
+	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
 	"github.com/gemfire/geode-go-client/query"
 	"github.com/golang/protobuf/proto"
 	"io"
 	"net"
 	"reflect"
+	"errors"
 )
 
 //go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf protocolVersion.proto
@@ -23,6 +23,14 @@ type Protobuf struct {
 
 const MAJOR_VERSION uint32 = 1
 const MINOR_VERSION uint32 = 1
+
+type RetryableError struct {
+	Err error
+}
+
+func (e *RetryableError) Error() string {
+	return e.Err.Error()
+}
 
 func NewConnector(pool *Pool) *Protobuf {
 	return &Protobuf{
@@ -422,8 +430,8 @@ func (this *Protobuf) QueryTableResult(query *query.Query) (map[string][]interfa
 	return results, nil
 }
 
-// Clone the struct of the passed in value and return a pointer to a new, empty instance. Does not clone
-// the value itself.
+// Clone the struct of the passed in value and return a pointer to a new, empty instance.
+// Does not clone the value itself.
 func cloneStruct(i interface{}) interface{} {
 	if i == nil {
 		return nil
@@ -475,12 +483,20 @@ func decodedFunctionResults(results []*v1.EncodedValue) ([]interface{}, error) {
 }
 
 func (this *Protobuf) doOperation(request *v1.Message) (*v1.Message, error) {
-	connection, err := this.pool.GetConnection()
+	gConn, err := this.pool.GetConnection()
 	if err != nil {
 		return nil, err
 	}
+	defer this.pool.ReturnConnection(gConn)
 
-	return doOperationWithConnection(connection, request)
+	message, err := doOperationWithConnection(gConn.rawConn, request)
+	if _, ok := err.(*RetryableError); ok {
+		return this.doOperation(request)
+	} else if err != nil {
+		return nil, err
+	}
+
+	return message, nil
 }
 
 func doOperationWithConnection(connection net.Conn, request *v1.Message) (*v1.Message, error) {
@@ -510,6 +526,9 @@ func writeMessage(connection net.Conn, message proto.Message) (err error) {
 
 	_, err = connection.Write(p.Bytes())
 	if err != nil {
+		if err.Error() == "EOF" {
+			return &RetryableError{err}
+		}
 		return err
 	}
 

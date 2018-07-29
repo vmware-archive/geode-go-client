@@ -9,7 +9,7 @@ import (
 	. "github.com/gemfire/geode-go-client/integration"
 	"fmt"
 	"github.com/gemfire/geode-go-client/query"
-)
+	)
 
 var _ = Describe("Client", func() {
 
@@ -134,7 +134,7 @@ var _ = Describe("Client", func() {
 	})
 
 	Describe("PutIfAbsent", func() {
-		It("should write data to region only if absent", func() {
+		FIt("should write data to region only if absent", func() {
 			// putIfAbsent actually puts if absent
 			cluster.Client.PutIfAbsent("FOO", "A", 777)
 			v, err := cluster.Client.Get("FOO", "A")
