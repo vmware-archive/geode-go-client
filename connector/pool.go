@@ -4,7 +4,11 @@ import (
 	"net"
 	"sync"
 	"errors"
+	"expvar"
 )
+
+var activeConnections = expvar.NewInt("activeConnections")
+var connectionsCreated = expvar.NewInt("connectionsCreated")
 
 type AuthenticationError string
 
@@ -66,12 +70,19 @@ func (this *Pool) GetConnection() (*GeodeConnection, error) {
 		}
 	}
 
-	for i := len(this.providers) - 1; i >= 0; i-- {
-		gConn = this.providers[i].GetGeodeConnection()
-		if gConn != nil {
-			break
+	if gConn == nil {
+		for i := len(this.providers) - 1; i >= 0; i-- {
+			gConn = this.providers[i].GetGeodeConnection()
+			if gConn != nil {
+				break
+			}
+			this.providers = append(this.providers[:i], this.providers[i+1:]...)
 		}
-		this.providers = append(this.providers[:i], this.providers[i+1:]...)
+
+		if gConn != nil {
+			this.recentConnections = append(this.recentConnections, gConn)
+			connectionsCreated.Add(1)
+		}
 	}
 
 	if gConn == nil {
@@ -93,6 +104,7 @@ func (this *Pool) GetConnection() (*GeodeConnection, error) {
 	}
 
 	gConn.inUse = true
+	activeConnections.Add(1)
 
 	return gConn, nil
 }
@@ -102,6 +114,7 @@ func (this *Pool) ReturnConnection(gConn *GeodeConnection) {
 	defer this.Unlock()
 
 	gConn.inUse = false
+	activeConnections.Add(-1)
 }
 
 // MUST hold the pool lock when calling
