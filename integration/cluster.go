@@ -2,13 +2,13 @@ package integration
 
 import (
 	"fmt"
-		"os"
+	"os"
 	"os/exec"
 	"strings"
 
 	geode "github.com/gemfire/geode-go-client"
 	"github.com/gemfire/geode-go-client/connector"
-	)
+)
 
 func geodeAddr2NetworkAddr(geodeAddr string) string {
 	networkAddr := strings.Replace(geodeAddr, "[", ":", 1)
@@ -23,16 +23,16 @@ type ClusterConfig struct {
 	LocatorName string
 	ServerName  string
 
-	ClusterDir  string
+	ClusterDir string
 
-	username    *string
-	password    *string
+	username *string
+	password *string
 }
 
 type GeodeCluster struct {
 	ClusterConfig
 
-	serverAddr  []string
+	serverAddr []string
 
 	Client *geode.Client
 }
@@ -55,7 +55,7 @@ func (g *GeodeCluster) Gfsh(command string) error {
 	if g.username == nil {
 		connectCmd = "connect --locator=" + g.GetLocatorAddress()
 	} else {
-		connectCmd = fmt.Sprintf("connect --locator=%s --user=%s --password=%s", g.GetLocatorAddress(),*g.username, *g.password)
+		connectCmd = fmt.Sprintf("connect --locator=%s --user=%s --password=%s", g.GetLocatorAddress(), *g.username, *g.password)
 	}
 
 	args := append([]string{"-e", connectCmd, "-e", command})
@@ -73,11 +73,11 @@ func (g *GeodeCluster) StartLocator() error {
 	args := []string{
 		"start",
 		"locator",
-		"--name="+g.LocatorName,
+		"--name=" + g.LocatorName,
 		"--J=-Dgeode.feature-protobuf-protocol=true",
 	}
 	if g.username != nil {
-		args = append(args,"--J=-Dgemfire.security-manager=org.apache.geode.examples.SimpleSecurityManager")
+		args = append(args, "--J=-Dgemfire.security-manager=org.apache.geode.examples.SimpleSecurityManager")
 	}
 
 	locator := exec.Command(os.ExpandEnv("$GEODE_HOME/bin/gfsh"), args...)
@@ -96,8 +96,8 @@ func (g *GeodeCluster) StartServer() error {
 	args := []string{
 		"start",
 		"server",
-		"--name="+g.ServerName,
-		"--locators="+g.GetLocatorAddress(),
+		"--name=" + g.ServerName,
+		"--locators=" + g.GetLocatorAddress(),
 		"--J=-Dgeode.feature-protobuf-protocol=true",
 	}
 

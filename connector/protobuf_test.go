@@ -8,6 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"net"
 	"strconv"
 	"github.com/gemfire/geode-go-client/query"
 	"errors"
@@ -120,6 +121,9 @@ var _ = Describe("Client", func() {
 		})
 
 		It("returns correct error when no connections are available", func() {
+			pool = connector.NewPool()
+			connection = connector.NewConnector(pool)
+
 			fakeConn.WriteStub = func(b []byte) (int, error) {
 				return -1, errors.New("EOF")
 			}
@@ -129,14 +133,18 @@ var _ = Describe("Client", func() {
 			Expect(err.Error()).To(Equal("no connections available"))
 		})
 
-		It("correctly retries with a new connection", func() {
+		It("correctly retries with a new connection when a write error occurs", func() {
 			// Connections are pulled off in the reverse order of their addition. This 'broken' connection
 			// will be used first.
 			eofFakeConn := new(connectorfakes.FakeConn)
-			pool.AddConnection(eofFakeConn, true)
 			eofFakeConn.WriteStub = func(b []byte) (int, error) {
-				return -1, errors.New("EOF")
+				return -1, &net.OpError{
+					Op:  "write",
+					Err: errors.New("fake retryable write error"),
+				}
 			}
+			pool.AddConnection(eofFakeConn, true)
+
 			fakeConn.ReadStub = func(b []byte) (int, error) {
 				v, _ := connector.EncodeValue(1)
 				response := &v1.Message{
@@ -153,6 +161,23 @@ var _ = Describe("Client", func() {
 			Expect(err).To(BeNil())
 			Expect(r).To(BeEquivalentTo(1))
 			Expect(eofFakeConn.WriteCallCount()).To(Equal(1))
+		})
+
+		It("does not retry when a read error occurs", func() {
+			// Connections are pulled off in the reverse order of their addition. This 'broken' connection
+			// will be used first.
+			eofFakeConn := new(connectorfakes.FakeConn)
+			eofFakeConn.WriteStub = func(b []byte) (int, error) {
+				return -1, &net.OpError{
+					Op:  "read",
+					Err: errors.New("fake read error"),
+				}
+			}
+			pool.AddConnection(eofFakeConn, true)
+
+			_, err := connection.Get("foo", "a", nil)
+			opError := err.(*net.OpError)
+			Expect(opError.Err).To(MatchError("fake read error"))
 		})
 	})
 

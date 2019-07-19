@@ -490,6 +490,10 @@ func (this *Protobuf) doOperation(request *v1.Message) (*v1.Message, error) {
 	defer this.pool.ReturnConnection(gConn)
 
 	message, err := doOperationWithConnection(gConn.rawConn, request)
+	if err != nil {
+		this.pool.DiscardConnection(gConn)
+	}
+
 	if _, ok := err.(*RetryableError); ok {
 		return this.doOperation(request)
 	} else if err != nil {
@@ -526,8 +530,11 @@ func writeMessage(connection net.Conn, message proto.Message) (err error) {
 
 	_, err = connection.Write(p.Bytes())
 	if err != nil {
-		if err.Error() == "EOF" {
-			return &RetryableError{err}
+		switch nerr := err.(type) {
+		case *net.OpError:
+			if nerr.Op == "write" {
+				return &RetryableError{err}
+			}
 		}
 		return err
 	}

@@ -9,6 +9,7 @@ import (
 
 var activeConnections = expvar.NewInt("activeConnections")
 var connectionsCreated = expvar.NewInt("connectionsCreated")
+var discardedConnections = expvar.NewInt("discardedConnections")
 
 type AuthenticationError string
 
@@ -47,6 +48,7 @@ func (this *Pool) AddConnection(c net.Conn, handshakeDone bool) {
 }
 
 func (this *Pool) AddLocator(host string, port int) {
+	// TODO: Implement me
 }
 
 func (this *Pool) AddServer(host string, port int) {
@@ -126,7 +128,16 @@ func (this *Pool) discardConnection(gConn *GeodeConnection) {
 		}
 	}
 
-	gConn.rawConn.Close()
+	_ = gConn.rawConn.Close()
+}
+
+// DiscardConnection is used publicly as it holds the necessary lock
+func (this *Pool) DiscardConnection(gConn *GeodeConnection) {
+	this.Lock()
+	this.discardConnection(gConn)
+	this.Unlock()
+
+	discardedConnections.Add(1)
 }
 
 func (this *Pool) AddCredentials(username, password string) {
