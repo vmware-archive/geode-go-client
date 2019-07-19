@@ -19,14 +19,11 @@ import (
     "github.com/gemfire/geode-go-client/connector"
     geode "github.com/gemfire/geode-go-client"
     "fmt"
+    "log"
 )
 
 func main() {
     var err error
-    c, err := net.Dial("tcp", "localhost:40404")
-    if err != nil {
-        panic(err)
-    }
 
     pool := connector.NewPool()
     pool.AddServer("localhost", 40404)
@@ -35,21 +32,27 @@ func main() {
     
     conn := connector.NewConnector(pool)
     client := geode.NewGeodeClient(conn)
-    if err != nil {
-        panic(err)
-    }
     fmt.Println("Connected....")
 
     // Add a primitive type
-    client.Put("FOO", "A", 777)
+    err = client.Put("FOO", "A", 777)
+    if err != nil {
+        log.Fatal(err)
+    }
 
-    v, _ := client.Get("FOO", "A")
+    v, err := client.Get("FOO", "A")
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Type assert so that we can use the value
     vx := v.(int32)
     fmt.Printf("Value for A: %d\n", vx)
 
-    client.Remove("FOO", "A")
+    err = client.Remove("FOO", "A")
+    if err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
