@@ -2,6 +2,7 @@ package connector
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	v1 "github.com/gemfire/geode-go-client/protobuf/v1"
 	"github.com/gemfire/geode-go-client/query"
@@ -9,7 +10,6 @@ import (
 	"io"
 	"net"
 	"reflect"
-	"errors"
 )
 
 //go:generate protoc --proto_path=$GEODE_CHECKOUT/geode-protobuf-messages/src/main/proto --go_out=../protobuf protocolVersion.proto
@@ -509,8 +509,15 @@ func doOperationWithConnection(connection net.Conn, request *v1.Message) (*v1.Me
 		return nil, err
 	}
 
+	// In the event that the client connection has timed out, it would have been closed by the server.
+	// This results in a FIN being sent to the client, however the prior write may appear to have succeeded
+	// even in light of the server side of the connection being closed. It is only on a subsequent read
+	// that an error will be detected. See Stevens pg 132, Section 5.13 SIGPIPE signal.
 	response, err := readResponse(connection)
 	if err != nil {
+		if err.Error() == "EOF" {
+			return nil, &RetryableError{err}
+		}
 		return nil, err
 	}
 
