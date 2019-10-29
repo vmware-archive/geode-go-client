@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"github.com/onsi/ginkgo/config"
 	"os"
 	"testing"
 
@@ -12,6 +13,9 @@ func TestIntegration(t *testing.T) {
 	if _, present := os.LookupEnv("GEODE_HOME"); present != true {
 		t.Skip("$GEODE_HOME is not set, skipping integration tests......!")
 	}
+
+	config.DefaultReporterConfig.SlowSpecThreshold = 60
+
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Integration Suite")
+	RunSpecsWithDefaultAndCustomReporters(t, "Integration Suite", []Reporter{NewGeodeLogReporter()})
 }

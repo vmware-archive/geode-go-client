@@ -30,14 +30,14 @@ type ClusterConfig struct {
 }
 
 type GeodeCluster struct {
-	ClusterConfig
+	*ClusterConfig
 
 	serverAddr []string
 
 	Client *geode.Client
 }
 
-func NewGeodeCluster(config ClusterConfig) *GeodeCluster {
+func NewGeodeCluster(config *ClusterConfig) *GeodeCluster {
 	cluster := &GeodeCluster{
 		ClusterConfig: config,
 		serverAddr:    []string{},

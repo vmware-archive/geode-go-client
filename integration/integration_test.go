@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 
@@ -11,6 +12,10 @@ import (
 	"github.com/gemfire/geode-go-client/query"
 	"time"
 )
+
+func logToGinkgo(format string, args ...interface{}) {
+	GinkgoWriter.Write([]byte(fmt.Sprintf(format, args...)))
+}
 
 var _ = Describe("Client", func() {
 
@@ -28,13 +33,14 @@ var _ = Describe("Client", func() {
 		tempDir    string
 		tempDirErr error
 		cluster    *GeodeCluster
+		config     *ClusterConfig
 	)
 
 	BeforeSuite(func() {
 		tempDir, tempDirErr = ioutil.TempDir("", "")
 		Expect(tempDirErr).To(BeNil())
 
-		config := ClusterConfig{
+		config = &ClusterConfig{
 			ClusterDir:  tempDir,
 			LocatorPort: 10334,
 			LocatorName: "locator1",
@@ -48,14 +54,16 @@ var _ = Describe("Client", func() {
 	})
 
 	BeforeEach(func() {
-		err := cluster.Gfsh("create region --name=FOO --type=REPLICATE")
+		configJson, err := json.Marshal(config)
 		Expect(err).To(BeNil())
+		logToGinkgo("%s\n", configJson)
 
+		err = cluster.Gfsh("create region --name=FOO --type=REPLICATE")
+		Expect(err).To(BeNil())
 	})
 
 	AfterEach(func() {
 		cluster.Gfsh("destroy region --name=FOO")
-
 	})
 
 	AfterSuite(func() {
